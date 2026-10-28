@@ -226,4 +226,5 @@ const debug = (addr) => { const l = S.launches.get(String(addr).toLowerCase()); 
 const known = (addr) => { const l = S.launches.get(String(addr).toLowerCase()); return l ? { src: l.pad, srcName: l.padName } : null; };
 const status = () => ({ cursors: CUR, tradeLogs: S.tradeLogs || 0, withBalance: [...S.launches.values()].filter((l) => l.quoteBal > 0n).length, last: S.last, range: S.range, tracked: S.launches.size, curves: S.curves.size, errors: S.errors, lastError: S.lastError, scannedAt: S.scannedAt, pads: PADS.map((p) => p.key) });
 
-module.exports = { scan, list, known, status, debug, PADS };
+const tokenMeta = async (addr) => { const m = await erc20Meta(String(addr).toLowerCase()); return { address: String(addr).toLowerCase(), symbol: m.symbol, name: m.name, decimals: m.decimals }; };
+module.exports = { scan, list, known, status, debug, tokenMeta, PADS };

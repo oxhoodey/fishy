@@ -356,7 +356,7 @@ header.top b{color:var(--cream)}
 .nt .ca{font:600 12px ui-monospace,monospace;color:#3B2416;margin-right:6px}
 .nt button,.nt a.src{font:8px "Press Start 2P",monospace;border:2px solid #3B2416;border-radius:4px;padding:6px 7px;cursor:pointer;text-decoration:none;display:inline-block;margin-left:4px}
 .nt .cp{background:#BDF4FF;color:#0A1640}.nt .cp.ok{background:#5FCB6A;color:#FFFFFF}.nt .ck{background:#3E8E5E;color:#FFF6DC}.nt a.src{min-width:64px;text-align:center}.nt a.pons{background:#FFD23F;color:#3B2416}.nt a.flap{background:#B27BEF;color:#FFFFFF}.nt a.dex{background:#3FA9F5;color:#FFFFFF}.nt a.pad{background:#FF8A2A;color:#FFFFFF}
-.nt .bond{display:inline-flex;align-items:center;gap:5px;font:7px "Press Start 2P",monospace;color:#9C5C33;margin-left:6px;vertical-align:middle}.nt .bond b{display:inline-block;width:46px;height:7px;border:2px solid #3B2416;border-radius:3px;background:#F3E2B8;overflow:hidden}.nt .bond u{display:block;height:100%;background:#FFD23F}.nt .bond.grad{color:#3E8E5E}.nt .bond em{font-style:normal;color:#8B5A2B}
+.nt .bond{display:inline-flex;align-items:center;gap:5px;font:7px "Press Start 2P",monospace;color:#9C5C33;margin-left:6px;vertical-align:middle}.nt .bond b{display:inline-block;width:46px;height:7px;border:2px solid #3B2416;border-radius:3px;background:#F3E2B8;overflow:hidden}.nt .bond u{display:block;height:100%;background:#FFD23F}.nt .bond.grad{color:#3E8E5E}#lnewp{margin-top:14px}.nt .lscore{font:10px "Press Start 2P",monospace;margin-right:6px}.nt .lscore.hi{color:#D7263D}.nt .lscore.mid{color:#B7791F}.nt .why b{display:block;font-size:12px}.nt .why small{display:block;color:#8B5A2B;font-size:11px;max-width:330px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.nt tr.sel{outline:3px solid #FFD23F}.nt .bond em{font-style:normal;color:#8B5A2B}
 .ntf{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}.ntf button{font:8px "Press Start 2P",monospace;border:2px solid #3B2416;border-radius:4px;padding:6px 8px;background:#FFF6DC;color:#3B2416;cursor:pointer}.ntf button.on{background:#3B2416;color:#FFD23F}.ntf i{font-style:normal;opacity:.7;margin-left:5px}
 .nt tr.sel td{background:#FFE9A8}.nt .empty td{text-align:center!important;color:#8B5A2B}
 #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);opacity:0;transition:.25s;background:#241527;color:#FFF6DC;font:9px "Press Start 2P",monospace;padding:10px 14px;border-radius:6px;z-index:60;pointer-events:none}
@@ -476,6 +476,9 @@ footer .note{max-width:70%}
       <div class="guide" style="left:2%;top:3%;max-width:40%"><b>SPOT THE LURE</b>a LARP is a lure painted like the real fish · the paint (ticker, name) is copied · look under it: contract, age, depth · red marks are the hooks</div>
       <div id="ltags"></div>
     </div></div>
+    <section class="pn newtok" id="lnewp"><h3>FRESH CATCH · LARP CHECK ON NEW TOKENS<span id="lnInfo">SCANNING…</span></h3>
+      <div class="ntf" id="lnF" role="group" aria-label="Filter"><button type="button" data-lf="all">ALL<i>0</i></button><button type="button" data-lf="flag">FLAGGED<i>0</i></button><button type="button" data-lf="ok">LOOKS ORIGINAL<i>0</i></button></div>
+      <div class="ntwrap"><table class="nt"><thead><tr><th>TOKEN</th><th>AGE</th><th>LARP</th><th class="hide2">WHY</th><th>CA</th><th></th></tr></thead><tbody id="lnBody"></tbody></table></div></section>
     <div class="lpanels">
       <section class="pn"><h3>EVIDENCE<span id="lsc">LARP SCORE 0</span></h3><div id="ev"></div></section>
       <section class="pn"><h3>FINGERPRINT<span>THIS vs ORIGINAL</span></h3><div id="fp"></div></section>
@@ -1014,7 +1017,9 @@ function larpAll(){
   const toks=[...S.tokens.values()];for(const t of toks)t.canon=canon(t.sym);
   const groups=new Map();for(const t of toks){if(!groups.has(t.canon))groups.set(t.canon,[]);groups.get(t.canon).push(t)}
   const origOf=c=>(groups.get(c)||[]).slice().sort((a,b)=>b.R-a.R||(b.age||0)-(a.age||0))[0];
-  for(const t of toks){
+  LG={groups,origOf};for(const t of toks)larpOne(t,groups,origOf)}
+let LG=null;
+function larpOne(t,groups,origOf){{
     const ev=[],add=(k,pts,on,txt,sub)=>ev.push({k,pts,on,txt,sub});const g=groups.get(t.canon)||[t],orig=origOf(t.canon);
     const isOrig=orig===t,raw=String(t.sym).toUpperCase().replace(/[^A-Z0-9]/g,"");
     const clear=orig&&orig!==t&&orig.R>Math.max(1,t.R)*3;
@@ -1033,6 +1038,12 @@ function larpAll(){
     t.larp={score,ev,orig,isOrig,family:g.length,near,hit,brand:brand?(BRAND_GROUP[brand]||brand):null,verdict:score>=60?"LIKELY LARP":score>=35?"SUSPICIOUS":isOrig&&g.length>1?"ORIGINAL · HAS COPIES":"LOOKS ORIGINAL"};
   }
 }
+// a token with no DEX pool (still on a bonding curve, or unknown CA): LARP needs only ticker + name, so score it against the chain's tokens
+function pseudoTok(nt){const age=nt.created?(Date.now()-Date.parse(nt.created))/864e5:null;
+  const t={pseudo:true,id:String(nt.id).toLowerCase(),sym:nt.sym||"?",name:nt.name||nt.sym||"",canon:canon(nt.sym),R:0,e5:0,age,pools:[],h:0,vol:0,grade:nt.status==="bonding"?"BONDING":"—",src:nt.src,srcName:nt.srcName};
+  if(!LG)larpAll();larpOne(t,LG.groups,LG.origOf);return t}
+function larpOpen(t){if(!t)return;if(!t.pseudo){scan(t,true);return}S.lastTouch=performance.now();S.pseudo=t;larpRender(t);chips();
+  toastMsg(t.sym+(t.grade==="BONDING"?" is still on a bonding curve · LARP checked by ticker and name":" has no DEX pool · LARP checked by ticker and name"))}
 const isMajor=t=>BLUE.has(String(t.sym).toUpperCase())&&t.larp?.isOrig!==false;
 const short8=id=>String(id).length>12?String(id).slice(0,6)+"…"+String(id).slice(-4):String(id);
 let L=null;
@@ -1455,7 +1466,7 @@ const sleep=ms=>new Promise(r=>setTimeout(r,ms));let busy=false,runId=0;
 function find(q){q=q.trim().toLowerCase();if(!q)return null;const all=[...S.tokens.values()];
   return all.find(t=>t.id.toLowerCase()===q)||all.filter(t=>t.sym.toLowerCase()===q).sort((a,b)=>b.vol-a.vol)[0]||all.filter(t=>t.sym.toLowerCase().startsWith(q)).sort((a,b)=>b.vol-a.vol)[0]||null}
 async function scan(t,user){
-  if(!t)return;if(user)S.lastTouch=performance.now();const id=++runId;S.sel=t;$("q").value=t.sym;
+  if(!t)return;if(user)S.lastTouch=performance.now();const id=++runId;S.sel=t;S.pseudo=null;$("q").value=t.sym;
   packets=[];hist=Array.from({length:120},()=>{const sp=t.h<.7&&Math.random()<.05;return{r:t.vol*(1+(Math.random()-.5)*.12)*(sp?2.2+Math.random():1),q:t.real*(1+(Math.random()-.5)*.08)}});ev("check");buildTree(t);squares(t);trace(t);chips();topo(t);
   $("hVer").textContent=t.grade+" · "+Math.round(t.h*100)+"%"+(t.larp.score>=60?" · LARP":"");larpRender(t);if(VIEW==="aut")autopsy(t);if(VIEW==="seis")seisPanels();if(VIEW==="swap")swapRun(t);$("hWash").textContent=pad(S.wash,2);
   codeLines=[];codeQ=[];code([`scan("${t.sym}")  // ${t.pools.length} pools`]);
@@ -1469,10 +1480,11 @@ async function scan(t,user){
 }
 function topo(t){const pairs=new Set(t.pools.map(p=>(p.a.id===t.id?p.b:p.a).sym));$("topo").textContent=`token · ${t.sym} · ${t.cat} · pools ${t.pools.length} · dust ${t.dust.length} · pairs ${pairs.size} · grade ${t.grade}`;
   METRICS.forEach((m,i)=>$("m"+i).textContent=m.f(t))}
+function larpBadge(nt){const t=S.tokens.get(nt.id)||(LG?pseudoTok(nt):null);return t&&t.larp&&t.larp.score>=35?"⚑":""}
 function chips(){const list=(VIEW==="larp"?tradable().sort((a,b)=>b.larp.score-a.larp.score||b.vol-a.vol):tradable().sort((a,b)=>b.vol-a.vol)).slice(0,12);
-  const mode=VIEW==="larp"?"top":(S.chipMode||"top"),nl=(typeof NT!=="undefined"?NT.list:[]);
-  const tog=VIEW==="larp"?"":`<button class="cmode${mode==="top"?" on":""}" data-mode="top" type="button">🔥 TOP</button><button class="cmode${mode==="new"?" on":""}" data-mode="new" type="button">🆕 NEW <span style="opacity:.7">${nl.length||""}</span></button><span class="csep"></span>`;
-  if(mode==="new"){$("chips").innerHTML=tog+(nl.length?nl.slice(0,12).map(t=>`<button data-new="${esc(t.id)}" class="${S.sel&&S.sel.id===t.id?"on":""}">${esc(t.sym)} <span style="opacity:.6">${agoShort(Date.now()-Date.parse(t.created))}</span></button>`).join(""):`<span class="cap mut">scanning new pools…</span>`)}
+  const mode=S.chipMode||"top",nl=(typeof NT!=="undefined"?NT.list:[]);
+  const tog=`<button class="cmode${mode==="top"?" on":""}" data-mode="top" type="button">🔥 TOP</button><button class="cmode${mode==="new"?" on":""}" data-mode="new" type="button">🆕 NEW <span style="opacity:.7">${nl.length||""}</span></button><span class="csep"></span>`;
+  if(mode==="new"){$("chips").innerHTML=tog+(nl.length?nl.slice(0,12).map(t=>`<button data-new="${esc(t.id)}" class="${(S.sel&&S.sel.id===t.id)||(VIEW==="larp"&&L&&L.t&&L.t.id===String(t.id).toLowerCase())?"on":""}">${esc(t.sym)} <span style="opacity:.6">${agoShort(Date.now()-Date.parse(t.created))}${VIEW==="larp"?" "+larpBadge(t):""}</span></button>`).join(""):`<span class="cap mut">scanning new pools…</span>`)}
   else $("chips").innerHTML=tog+list.map(t=>`<button data-t="${esc(t.id)}" class="${S.sel===t?"on":""}">${esc(t.sym)} <span style="opacity:.6">${t.grade}${t.larp&&t.larp.score>=60?" ⚑":""}</span></button>`).join("");
   $("tl").innerHTML=list.map(t=>`<option value="${esc(t.sym)}">`).join("")}
 
@@ -1484,12 +1496,19 @@ async function lookupCA(addr){addr=addr.trim().toLowerCase();code([`lookup ${add
     j.pools.forEach(p=>S.extra.set(p.id,p));ingest(S.pools.concat(j.pools));chips();return S.tokens.get(j.pools[0].a.id.toLowerCase()===addr?j.pools[0].a.id:j.pools[0].b.id.toLowerCase()===addr?j.pools[0].b.id:addr)||find(addr)}
   catch(e){code([`lookup failed: ${e.message||e}`]);toastMsg(S.mode==="live"?"Lookup failed, try again":"Paste-a-CA works on the live site");return null}}
 function toastMsg(m){let el=$("toast");if(!el){el=document.createElement("div");el.id="toast";document.body.appendChild(el)}el.textContent=m;el.className="on";clearTimeout(el.__t);el.__t=setTimeout(()=>el.className="",2400)}
-$("go").onclick=async()=>{const v=$("q").value.trim();let t=find(v);if(!t&&isCA(v))t=await lookupCA(v);if(t){scan(t,true);document.getElementById("stage").scrollIntoView({behavior:"smooth",block:"center"})}else code([`error: "${v}" not in tracked pools`])};
+$("go").onclick=async()=>{const v=$("q").value.trim();const stage=VIEW==="larp"?"lstage":"stage";let t=find(v);
+  if(!t&&isCA(v)){const ca=v.toLowerCase(),nt=NT.list.find(x=>String(x.id).toLowerCase()===ca);
+    if(VIEW==="larp"&&nt&&nt.status==="bonding")t=pseudoTok(nt);else t=await lookupCA(v);
+    if(!t&&VIEW==="larp"){if(nt)t=pseudoTok(nt);else{try{const r=await fetch("api/erc20/"+ca,{cache:"no-store"});if(r.ok){const m=await r.json();if(m.symbol)t=pseudoTok({id:ca,sym:m.symbol,name:m.name})}}catch(_){}}}}
+  if(t){if(t.pseudo)larpOpen(t);else scan(t,true);document.getElementById(stage).scrollIntoView({behavior:"smooth",block:"center"})}else{code([`error: "${v}" not in tracked pools`]);if(isCA(v))toastMsg("Couldn't read that CA on Robinhood Chain")}};
+$("q").addEventListener("paste",()=>setTimeout(()=>{if(isCA($("q").value))$("go").click()},30));
 $("q").addEventListener("keydown",e=>{if(e.key==="Enter")$("go").click()});
 let swDeb;$("size").oninput=e=>{S.size=Math.round(Math.pow(10,+e.target.value)/10)*10;PG.tk=null;$("sizev").textContent=money(S.size);S.lastTouch=performance.now();if(S.sel)trace(S.sel);if(VIEW==="swap"){clearTimeout(swDeb);swDeb=setTimeout(()=>swapRun(S.sel),400)}};
 $("auto").onclick=e=>{S.auto=!S.auto;e.currentTarget.classList.toggle("off",!S.auto);e.currentTarget.textContent=S.auto?"AUTO ●":"AUTO ○";e.currentTarget.setAttribute("aria-pressed",S.auto)};
 document.addEventListener("click",async e=>{const md=e.target.closest("[data-mode]");if(md){S.chipMode=md.dataset.mode;try{localStorage.setItem("fishyChips",S.chipMode)}catch(_){}if(S.chipMode==="new")loadNew();chips();return}
-  const nw=e.target.closest("[data-new]");if(nw){const ca=nw.dataset.new;let t=S.tokens.get(ca)||find(ca);if(!t&&isCA(ca))t=await lookupCA(ca);if(t){scan(t,true);chips()}return}
+  const nw=e.target.closest("[data-new]");if(nw){const ca=nw.dataset.new;let t=S.tokens.get(ca)||find(ca);const nt=NT.list.find(x=>x.id===ca);
+    if(!t&&VIEW==="larp"&&nt&&nt.status==="bonding"){larpOpen(pseudoTok(nt));return}
+    if(!t&&isCA(ca))t=await lookupCA(ca);if(!t&&VIEW==="larp"&&nt){larpOpen(pseudoTok(nt));return}if(t){scan(t,true);chips()}return}
   const b=e.target.closest("[data-t]");if(b){const t=S.tokens.get(b.dataset.t);if(t)scan(t,true)}});
 try{S.chipMode=localStorage.getItem("fishyChips")||"top"}catch(_){S.chipMode="top"}
 $("stage").addEventListener("click",e=>{if(!T)return;const r=$("stage").getBoundingClientRect(),k=r.width/DW,px=(e.clientX-r.left)/k,py=(e.clientY-r.top)/k;
@@ -1527,7 +1546,7 @@ function srcLink(t){const k=srcOf(t);if(SRC[k])return{k,label:SRC[k].label,cls:S
   return{k,label:String(t.srcName||k).toUpperCase().slice(0,11),cls:"pad",href:otherUrl().replace("{ca}",t.id)}}
 const ntGroup=t=>{const k=srcOf(t);return k==="pons"||k==="flap"||k==="dex"?k:"other"};
 const pct=p=>p>0&&p<.1?(p*100).toFixed(1)+"%":Math.round(p*100)+"%",fmtQ=v=>v==null?"?":v>=100?Math.round(v).toString():v>=1?v.toFixed(2):v.toFixed(3);
-function renderNew(){const b=$("ntBody");if(!b)return;const F=NT.filter||"all",L=NT.list.filter(t=>F==="all"||ntGroup(t)===F);
+function renderNew(){try{renderLarpNew()}catch(_){}const b=$("ntBody");if(!b)return;const F=NT.filter||"all",L=NT.list.filter(t=>F==="all"||ntGroup(t)===F);
   document.querySelectorAll("#ntF button").forEach(x=>{const k=x.dataset.f,n=k==="all"?NT.list.length:NT.list.filter(t=>ntGroup(t)===k).length;x.classList.toggle("on",k===F);x.querySelector("i").textContent=n});if(S.chipMode==="new"&&VIEW!=="larp")chips();
   $("ntInfo").textContent=(S.mode==="live"?"LIVE":"DEMO")+" · "+L.length+" NEWEST";
   if(!L.length){b.innerHTML=`<tr class="empty"><td colspan="6">${F==="all"?"No new tokens yet.":"No "+F.toUpperCase()+" launches spotted yet."} Refreshes every minute.</td></tr>`;return}
@@ -1536,6 +1555,20 @@ function renderNew(){const b=$("ntBody");if(!b)return;const F=NT.filter||"all",L
       <td class="num">${agoShort(age)}</td><td class="num">${t.mc?money(t.mc):"—"}</td><td class="num hide2">${t.liq?money(t.liq):"—"}</td>
       <td><span class="ca" title="${esc(t.id)}">${esc(short)}</span><button class="cp" data-ca="${esc(t.id)}" type="button">COPY</button></td>
       <td><button class="ck" data-check="${esc(t.id)}" type="button">CHECK</button>${(()=>{const L=srcLink(t);return `<a class="src ${L.cls}" href="${esc(L.href)}" target="_blank" rel="noopener noreferrer" title="Open on ${L.label==="DEX"?"DexPaprika":L.cls==="pad"?"the explorer (launched on "+L.label+")":L.label}">${L.label} ↗</a>`})()}</td></tr>`}).join("")}
+function renderLarpNew(){const b=$("lnBody");if(!b||!NT.list.length&&!b.dataset.init){if(b){b.dataset.init=1;b.innerHTML=`<tr class="empty"><td colspan="6">No new tokens yet. Refreshes every minute.</td></tr>`}return}
+  if(!LG)return;const F=NT.lf||"all",rows=NT.list.map(nt=>({nt,t:S.tokens.get(nt.id)||pseudoTok(nt)}));
+  const pick=r=>F==="all"||(F==="flag"?r.t.larp.score>=35:r.t.larp.score<35);
+  document.querySelectorAll("#lnF button").forEach(x=>{const k=x.dataset.lf;x.classList.toggle("on",k===F);x.querySelector("i").textContent=rows.filter(r=>k==="all"||(k==="flag"?r.t.larp.score>=35:r.t.larp.score<35)).length});
+  const R=rows.filter(pick);$("lnInfo").textContent=rows.filter(r=>r.t.larp.score>=35).length+" FLAGGED · "+rows.length+" NEW";
+  if(!R.length){b.innerHTML=`<tr class="empty"><td colspan="6">${F==="flag"?"No new token looks like a copy right now.":"Nothing here."}</td></tr>`;return}
+  b.innerHTML=R.map(({nt,t})=>{const lp=t.larp,age=Date.now()-Date.parse(nt.created),short=nt.id.length>14?nt.id.slice(0,6)+"…"+nt.id.slice(-4):nt.id,why=lp.ev.find(e=>e.on),cls=lp.score>=60?"hi":lp.score>=35?"mid":"",on=L&&L.t&&L.t.id===String(nt.id).toLowerCase()?" sel":"",Lk=srcLink(nt);
+    return `<tr class="${on}"><td><span class="sy">${esc(nt.sym)}</span>${age<36e5?'<span class="fresh">NEW</span>':""}<span class="nm">${esc(nt.name||"")}${nt.status==="bonding"?" · BONDING":""}</span></td>
+      <td class="num">${agoShort(age)}</td><td><span class="lscore ${cls}">${lp.score}</span><span class="vd ${cls}">${lp.score>=60?"LARP":lp.score>=35?"SUS":"OK"}</span></td>
+      <td class="hide2 why">${why?`<b>${esc(why.txt)}</b><small>${esc(why.sub)}</small>`:'<small>No copied ticker, look-alike or brand name</small>'}</td>
+      <td><span class="ca" title="${esc(nt.id)}">${esc(short)}</span><button class="cp" data-ca="${esc(nt.id)}" type="button">COPY</button></td>
+      <td><button class="ck" data-lcheck="${esc(nt.id)}" type="button">LARP CHECK</button><a class="src ${Lk.cls}" href="${esc(Lk.href)}" target="_blank" rel="noopener noreferrer">${Lk.label} ↗</a></td></tr>`}).join("")}
+document.addEventListener("click",e=>{const f=e.target.closest("#lnF button");if(f){NT.lf=f.dataset.lf;renderLarpNew();return}
+  const lc=e.target.closest("[data-lcheck]");if(lc){const nt=NT.list.find(x=>x.id===lc.dataset.lcheck);if(!nt)return;const t=S.tokens.get(nt.id);larpOpen(t||pseudoTok(nt));renderLarpNew();document.getElementById("lstage").scrollIntoView({behavior:"smooth",block:"center"})}});
 function demoNew(){const now=Date.now(),ts=tradable().filter(t=>!HUB.has(t.sym.toUpperCase())).slice(0,10);
   return ts.map((t,i)=>({id:t.id.startsWith("0x")?t.id:"0x"+(t.sym+"000000000000000000000000000000000000000").replace(/[^0-9a-f]/gi,"a").slice(0,40).toLowerCase(),sym:t.sym,name:t.name,pair:"WETH",mc:t.R*2*(3+i),liq:t.R*2,src:["pons","dex","flap","hoodfun"][i%4],srcName:i%4===3?"HOOD.FUN":undefined,status:i%2?"dex":"bonding",progress:i%2?null:Math.min(.97,.12+i*.11),created:new Date(now-(i*i*7+3)*60000).toISOString()}))}
 async function loadNew(){if(S.mode==="live"){try{const r=await fetch("api/new",{cache:"no-store"});if(r.ok){const j=await r.json();NT.list=j.tokens||[];NT.at=j.updatedAt}}catch(_){}}else NT.list=demoNew();renderNew()}
@@ -1544,7 +1577,7 @@ document.addEventListener("click",async e=>{const fb=e.target.closest("#ntF butt
     cp.textContent=ok?"COPIED":"COPY?";cp.classList.toggle("ok",ok);setTimeout(()=>{cp.textContent="COPY";cp.classList.remove("ok")},1500);if(!ok)toastMsg(ca);return}
   const ck=e.target.closest(".nt .ck");if(ck){const ca=ck.dataset.check;const nt=NT.list.find(x=>x.id===ca);
     if(nt&&nt.status==="bonding"&&!S.tokens.get(ca)){toastMsg(nt.sym+" is still on the "+srcLink(nt).label+" bonding curve. No DEX pool to check yet.");return}let t=S.tokens.get(ca)||find(ca);if(!t&&isCA(ca))t=await lookupCA(ca);if(t){if(VIEW!=="check")setView("check");scan(t,true);renderNew();document.getElementById("stage").scrollIntoView({behavior:"smooth",block:"center"})}}});
-setInterval(()=>{if(VIEW==="check")loadNew()},60000);setInterval(renderNew,30000);
+setInterval(()=>{if(VIEW==="check"||VIEW==="larp")loadNew()},60000);setInterval(renderNew,30000);
 (function(){const b=$("lblbtn");if(!b)return;const sync=()=>{b.textContent=LBL.on?"LABELS ON":"LABELS OFF";b.setAttribute("aria-pressed",LBL.on);b.closest(".howto").classList.toggle("min",false)};sync();
   b.addEventListener("click",()=>{LBL.on=!LBL.on;try{localStorage.setItem("fishyLabels",LBL.on?"1":"0")}catch(_){}sync()})})();
 async function boot(){
@@ -1559,7 +1592,7 @@ async function boot(){
     for(let k=0;k<6;k++)ev("scan");S.scanned+=j.pools.length;const t=keep&&S.tokens.get(keep);if(t){S.sel=t;trace(t);squares(t);topo(t)}chips()}catch(_){}})}catch(_){}}
 }
 const ILL={sharkI:["......X.........",".....XkX........","....XkkkX.....XX","..XXkkkkkXXX.XkX",".XkkRkkkkkkkXkkX","XkkkkkkkkkkkkkX.","XWXWXwwwwwwkkkkX",".XwwwwwwwwwXXXkX","..XXXXXXXXX...XX"],mag:["....XXXXX.......","...XVVVVVX......","..XVWWVVVVX.....",".XVWVVVVVVVX....",".XVWVVVVVVVX....",".XVVVVVVVVVX....",".XVVVVVVVVVX....","..XVVVVVVVX.....","...XVVVVVXX.....","....XXXXXbbX....","..........XbbX..","...........XbbX.","............XbbX",".............XX."],heart:["..XXX....XXX...",".XRRRX..XRRRX..","XRWWRRXXRRRRRX.","XRWRRRRRRRRRRX.","XRRRRRRRRRRRRX.","XRRRRRRRRRRRRX.",".XRRRRRRRRRRX..","..XRRRRRRRRX...","...XRRRRRRX....","....XRRRRX.....",".....XRRX......","......XX......."],folder:["XXXXXX..........","XyyyyyXXXXXXXXX.","XyyyyyyyyyyyyyX.","XXXXXXXXXXXXXXXX","XYYYYYYYYYYYYYYX","XYYYYYYYYYYYYYYX","XYYYXXXXXXXYYYYX","XYYYXRRRRRXYYYYX","XYYYXXXXXXXYYYYX","XYYYYYYYYYYYYYYX","XyyyyyyyyyyyyyyX","XXXXXXXXXXXXXXXX"],book:[".XXXXXXXXXXXX..","XRRRRRRRRRRRRX.","XRrrrrrrrrrrRX.","XRrXYYYYYYXrRX.","XRrrrrrrrrrrRX.","XRRRRRRRRRRRRX.","XRRRRYYYYRRRRX.","XRRRRRRRRRRRRX.","XRRRRRRRRRRRRX.","XRRRRRRRRRRRRX.","XWWWWWWWWWWWWX.","XwwwwwwwwwwwwX.",".XXXXXXXXXXXX.."],mask:["..XXXXXXXXXXX..",".XWWWWWWWWWWWX.","XWWWWWWWWWWWWWX","XWXXXWWWWWXXXWX","XWXKXWWWWWXKXWX","XWWXWWWWWWWXWWX","XWWWWWWXWWWWWWX",".XWWWWXXXWWWWX.",".XWWRWWWWWRWWX.","..XWWRRRRRWWX..","...XWWWWWWWX...","....XXXXXXX...."],bolt:["......XX........",".....XYYX.......","....XYYX........","...XYYX.........","..XYYYYYYX......","...XXXYYX.......",".....XYYX.......","....XYYX........","...XYX..........","..XX............","XXXXXXXXXXXXXXXX","XEEEXEEEEEXEEEEX","XDDXDDDDDXDDDDDX","XXXXXXXXXXXXXXXX"],light:["..XYX..XXXX..XYX",".......XYYX.....","......XXXXXX....","......XRRRRX....","......XWWWWX....","......XRRRRX....",".....XWWWWWWX...",".....XRRRRRRX...",".....XWWWWWWX...","....XRRRRRRRRX..","....XWWWWWWWWX..","...XXXXXXXXXXXX.","..XUUUUUUUUUUUUX","..XVVUUUVVUUUVUX"],reel:["....XXXXXX......","...XwwwwwwX.....","..XwkkkkkkwX....",".XwkXXXXXXkwX...",".XwkXUUUUXkwX...",".XwkXUWWUXkwXXXX",".XwkXUWWUXkwXbbX",".XwkXUUUUXkwXXXX",".XwkXXXXXXkwX...","..XwkkkkkkwX....","...XwwwwwwX.....","....XXXXXX......"],scroll:["..XXXXXXXXXXXX..",".XEEEEEEEEEEEEX.","XEXXEEEEEEEEXEEX",".XEEEEEEEEEEEEX.","..XEbbbbbbbbEX..","..XEEEEEEEEEEX..","..XEbbbbbbEEEX..","..XEEEEEEEEEEX..","..XEbbbbbbbbEX..","..XEEEEEEEEEEX..","..XEbbbbbEEEEX..",".XEEEEEEEEEEEEX.","XEEXEEEEEEEEXXEX",".XXXXXXXXXXXXXX."],door:["..XXXXXXXXX.....",".XBBBBBBBBBX....",".XBbBBBBBbBX....",".XBbBBBBBbBX....",".XBBBBBBBBBX....",".XBbBBBBBbBX..Y.",".XBbBBBBYbBX.YY.",".XBbBBBBBbBXYYYY",".XBBBBBBBBBX.YY.",".XBbBBBBBbBX..Y.",".XBbBBBBBbBX....",".XBBBBBBBBBX....","XXXXXXXXXXXXXXXX"],flask:["....XXXXXX......",".....XWWX.......",".....XWWX.......","....XWWWWX......","...XWWWWWWX.....","..XVVVVVVVVX....",".XVWVVVVVVVVX...",".XVVVVUVVVVVX...",".XUUUUUUUUUUX...",".XUUUWUUUUUUX...","..XXXXXXXXXX...."],hook:["....XXX.........","....XwX.........","....XwX.........","....XwX.........","....XwX.........","....XwX....XX...","X...XwX...XwX...","XwX.XwX...XwX...","XwX.XwX..XwX....",".XwXXwXXXwX.....","..XwwwwwwX......","...XXXXXX......."],gear:["......XXXX......","..XX..XkkX..XX..",".XkkXXXkkXXXkkX.","..XkkkkkkkkkkX..","..XkkkXXXXkkkX..","XXXkkXwwwwXkkXXX","XkkkXwX..XwXkkkX","XkkkXwX..XwXkkkX","XXXkkXwwwwXkkXXX","..XkkkXXXXkkkX..","..XkkkkkkkkkkX..",".XkkXXXkkXXXkkX.","..XX..XkkX..XX..","......XXXX......"],seed:["......XX.XX.....",".....XgMXMgX....","....XgMMXMMgX...",".....XXgXgXX....","........X.......","........X.......","...XXXXXXXXXX...","..XBBBBBBBBBBX..","...XbbbbbbbbX...","...XBBBBBBBBX...","....XXXXXXXX...."],egg:["......XXXX......",".....XWWWWX.....","....XWWWWWWX....","...XWWYYWWWWX...","...XWWWWWWWWX...","..XWWWWWWWWWWX..","..XWXWXWXWXWWX..","..XXwXwXwXwXXX..","..XwwwwwwwwwwX..","...XwwwwwwwwX...","....XXXXXXXX...."],pouch:["......XXX.......",".....XbBbX......","......XXX.......","....XXBBBXX.....","...XBBBBBBBX....","..XBBBYYYBBBX...","..XBBYBBBBBBX...","..XBBBYYYBBBX...","..XBBBBBBYBBX...","..XBBBYYYBBBX...","...XBBBBBBBX....","....XXXXXXX....."],castle:["X.X.X.....X.X.X","XXXXX.....XXXXX","XwwwX.....XwwwX","XwwwXX.X.XXwwwX","XwwwXXXXXXXwwwX","XwwwwwwwwwwwwwX","XwKwwwwXwwwwKwX","XwwwwwXXXwwwwwX","XwwwwXbbbXwwwwX","XwwwwXbbbXwwwwX","XXXXXXXXXXXXXXX"],bulb:[".....XXXXX......","....XYYYYYX.....","...XYWWYYYYX....","...XYWYYYYYX....","...XYYYYYYYX....","....XYYYYYX.....",".....XyyyX......",".....XwwwX......",".....XkkkX......","......XXX......."],warn:[".......XX.......","......XYYX......",".....XYYYYX.....",".....XYKKYX.....","....XYYKKYYX....","....XYYKKYYX....","...XYYYKKYYYX...","...XYYYYYYYYX...","..XYYYYKKYYYYX..","..XYYYYYYYYYYX..",".XXXXXXXXXXXXXX."]};
-const ILL_MAP=[["NEW TOKENS","egg"],["REAL vs","salmon"],["PIPELINE","reel"],["COMPUTE","gear"],["EXIT CURVE","door"],["EVIDENCE","mag"],["FINGERPRINT","mask"],["CLONE","book"],["SHARK","sharkI"],["WATCHTOWER","light"],["PREDATOR","sharkI"],["QUAKE","bolt"],["STATION","light"],["FINDINGS","scroll"],["VITAL","heart"],["CASE","folder"],["POOLS TESTED","flask"],["HOOK","hook"],["REPRODUCE","chest"],["PHASE 1","seed"],["PHASE 2","egg"],["PHASE 3","pouch"],["PHASE 4","castle"],["SPARE","bulb"],["RISK","warn"]];
+const ILL_MAP=[["NEW TOKENS","egg"],["FRESH CATCH","hook"],["REAL vs","salmon"],["PIPELINE","reel"],["COMPUTE","gear"],["EXIT CURVE","door"],["EVIDENCE","mag"],["FINGERPRINT","mask"],["CLONE","book"],["SHARK","sharkI"],["WATCHTOWER","light"],["PREDATOR","sharkI"],["QUAKE","bolt"],["STATION","light"],["FINDINGS","scroll"],["VITAL","heart"],["CASE","folder"],["POOLS TESTED","flask"],["HOOK","hook"],["REPRODUCE","chest"],["PHASE 1","seed"],["PHASE 2","egg"],["PHASE 3","pouch"],["PHASE 4","castle"],["SPARE","bulb"],["RISK","warn"]];
 const ICON_PAL={X:"#241527",K:"#241527",V:"#BFEFFF",U:"#3FA9F5",u:"#1F6FC2",R:"#E8443F",r:"#FF8F7A",F:"#E8443F",W:"#FFFFFF",w:"#D9DEE8",k:"#6B7389",Y:"#FFD23F",y:"#E6A53A",B:"#9C5C33",b:"#663624",E:"#F3E2B8",T:"#D39452",q:"#E8A866",g:"#36924A",G:"#21643F",M:"#B4E67E",L:"#8BE06A",P:"#B27BEF",D:"#7A5A3A",d:"#4A2A1E",S:"#F7D2AA",s:"#E6A57D",A:"#F1EDE2",O:"#FF8A2A",C:"#EE8473"};
 function illustrate(){document.querySelectorAll(".pn h3:not([data-ill])").forEach(h=>{h.dataset.ill=1;const txt=(h.firstChild&&h.firstChild.textContent||h.textContent).trim().toUpperCase();
   const m=ILL_MAP.find(([k])=>txt.startsWith(k.toUpperCase()));const name=m?m[1]:"bobber",rows=ILL[name]||SPR[name];if(!rows)return;

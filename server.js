@@ -415,6 +415,11 @@ const server = http.createServer((req, res) => {
   }
   if (u.pathname === "/api/health") return send(res, 200, { ok: !snapshot.error, updatedAt: snapshot.updatedAt, pools: snapshot.pools.length, error: snapshot.error, clients: clients.size });
   if (u.pathname === "/api/config") return send(res, 200, publicConfig());
+  if (u.pathname.startsWith("/api/erc20/")) {
+    const a = u.pathname.split("/").pop();
+    if (!/^0x[0-9a-fA-F]{40}$/.test(a)) return send(res, 400, { error: "bad address" });
+    return launchpads.tokenMeta(a).then((m) => send(res, m.symbol ? 200 : 404, m.symbol ? m : { error: "not an ERC-20 on this chain" }), (e) => send(res, 502, { error: String(e.message || e) }));
+  }
   if (u.pathname.startsWith("/api/launchpads/")) { const d = launchpads.debug(u.pathname.split("/").pop()); return send(res, d ? 200 : 404, d || { error: "token not tracked by the launchpad scanner" }); }
   if (u.pathname === "/api/launchpads") return send(res, 200, launchpads.status());
   if (u.pathname === "/api/new") return send(res, 200, { updatedAt: snapshot.updatedAt, tokens: snapshot.newTokens || [] });
