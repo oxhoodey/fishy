@@ -99,7 +99,7 @@ header.top{display:flex;align-items:flex-end;gap:24px;flex-wrap:wrap}
 .tabs button.on{background:var(--ink);color:var(--paper)}
 .brand{margin-right:0}
 .lstage{position:relative;margin-top:6px;border:1px solid var(--gray2);background:var(--paper);aspect-ratio:1000/640;max-width:100%;overflow:hidden;cursor:crosshair}
-.lstage canvas{position:absolute;inset:0;width:100%;height:100%}
+.lstage canvas{position:absolute;inset:0;width:100%;height:100%}#lcx{pointer-events:none}
 .lread{position:absolute;right:1.4%;bottom:1.6%;flex-direction:row!important;display:flex;flex-direction:column;gap:6px;align-items:flex-end;pointer-events:none}
 .lread .tag{position:static;transform:none}
 .lpanels{display:grid;grid-template-columns:1.1fr 1fr 1.1fr;gap:12px;margin-top:12px}
@@ -471,9 +471,9 @@ footer .note{max-width:70%}
 
   <div id="v-larp" hidden>
     <div class="stagewrap"><div class="lstage" id="lstage">
-      <canvas id="lc" aria-label="Identity gel: one lane per token, bands show which traits match the original"></canvas>
-      <div class="legend"><div><i class="a"></i>LANE = ONE TOKEN</div><div><i class="b"></i>REFERENCE LINE = ORIGINAL'S BAND</div><div><i class="y"></i>BAND ON THE LINE = COPIED TRAIT</div><div><i class="d"></i>BAND OFF THE LINE = DIFFERENT</div></div>
-      <div class="guide" style="left:2%;top:3%;max-width:44%"><b>HOW TO READ</b>like a DNA test · lane 1 is the original · a LARP copies the look (ticker, name) but not the substance (contract, age, depth) · bands on the reference line are copied, bands off the line give it away</div>
+      <canvas id="lc" class="pix" aria-label="Spot the Lure: the original token is the real fish; copies are lures painted to look like it. Hooks and red marks show what differs."></canvas><canvas id="lcx"></canvas>
+      <div class="legend pxl"><div>🐟 REAL FISH = ORIGINAL</div><div>🎣 LURE = COPY · MORE HOOKS, MORE FAKE</div><div style="color:#2E7D46">■ SAME AS THE ORIGINAL</div><div style="color:#D7263D">■ DIFFERENT (HOOK SHOWING)</div></div>
+      <div class="guide" style="left:2%;top:3%;max-width:40%"><b>SPOT THE LURE</b>a LARP is a lure painted like the real fish · the paint (ticker, name) is copied · look under it: contract, age, depth · red marks are the hooks</div>
       <div id="ltags"></div>
     </div></div>
     <div class="lpanels">
@@ -1061,12 +1061,7 @@ function larpRender(t){
   $("reg").innerHTML=reg.map(x=>`<button data-t="${esc(x.id)}" class="${x===t?"on":""}"><span class="nm">${esc(x.sym)}<small>${esc(x.name)} · ${ageTxt(x.age)}</small></span><span class="num">${x.larp.score}</span><span class="vd ${x.larp.score>=60?"hi":"mid"}">${x.larp.score>=60?"LARP":"SUS"}</span></button>`).join("")||`<div class="note">No token is flagged right now.</div>`;
   layoutLarpTags();
 }
-function layoutLarpTags(){
-  if(!L)return;const k=$("lstage").clientWidth/1000,H=Math.round(1000*$("lstage").clientHeight/Math.max(1,$("lstage").clientWidth)),cx=560,cy=H/2+10,R0=[0,110,175,235];let h="";
-  const c=L.center;h+=`<div class="lread">`;h+=c.virtual?`<div class="tag warn"><b>BRAND · ${esc(c.sym)}</b>no verified token on this chain · every token here borrows the name</div>`:`<div class="tag${c===L.t?"":" ghost"}"><b>${c===L.t?"SCANNED · ":""}${L.t.larp.orig===c||c===L.t?"ORIGINAL":"REFERENCE"} · ${esc(c.sym)}</b>${esc(c.name)} · ${short8(c.id)} · exit ${money(c.e5)} · ${ageTxt(c.age)}</div>`;
-  const tn=L.nodes.find(n=>n.o===L.t);if(tn){h+=`<div class="tag warn" id="ltag"><b>SCANNED · ${esc(L.t.sym)} · LARP ${L.t.larp.score}</b>${esc(L.t.name)} · ${short8(L.t.id)} · ${ageTxt(L.t.age)} old</div>`}
-  h+=`</div>`;$("ltags").innerHTML=h;
-}
+function layoutLarpTags(){const e=$("ltags");if(e)e.innerHTML=""}
 /* identity gel: loci = traits; band height inside a locus encodes the value, so equal values sit on the same line */
 const LOCI=[
  {k:"TICKER",d:"symbol, normalised",v:o=>o.canon,m:(a,b)=>a.canon===b.canon,look:1},
@@ -1079,58 +1074,66 @@ const LOCI=[
  {k:"REAL VOL",d:"share of volume that is real",n:o=>o.virtual?null:o.h,m:(a,b)=>!a.virtual&&!b.virtual&&Math.abs(a.h-b.h)<.2,look:0}];
 const hpos=str=>.12+seeded(String(str))()*.76;
 function bandPos(L2,o){if(o.virtual&&!["TICKER","BRAND","NAME"].includes(L2.k))return null;if(L2.n){const v=L2.n(o);return v==null?null:.1+v*.8}const v=L2.v(o);return v===""?null:hpos(L2.k+v)}
+/* SPOT THE LURE: lane 1 is the real fish (original); every other lane is a lure painted to look like it.
+   The rows under each lure are the same traits the gel used: green = same as the original, red = different (a hook showing). */
+const LURE_KINDS=["bass","trout","koi","salmon"];
+function lureKind(o){const s=String(o.canon||o.sym||"");let h=0;for(const ch of s)h=(h*31+ch.charCodeAt(0))>>>0;return LURE_KINDS[h%LURE_KINDS.length]}
+function mark(c,x,y,ok){if(ok){prect(c,x,y,7,7,"#2E7D46");prect(c,x+1,y+3,1,1,"#FFFFFF");prect(c,x+2,y+4,1,1,"#FFFFFF");prect(c,x+3,y+3,1,1,"#FFFFFF");prect(c,x+4,y+2,1,1,"#FFFFFF");prect(c,x+5,y+1,1,1,"#FFFFFF")}
+  else{prect(c,x,y,7,7,"#D7263D");for(let i=1;i<6;i++){prect(c,x+i,y+i,1,1,"#FFFFFF");prect(c,x+6-i,y+i,1,1,"#FFFFFF")}}}
+function hook(c,x,y,now,ph){const sw=Math.round(Math.sin(now/300+ph));x+=sw;prect(c,x,y,1,4,"#9AA3B5");prect(c,x-2,y+4,1,2,"#9AA3B5");prect(c,x-1,y+6,3,1,"#9AA3B5");prect(c,x+2,y+4,1,2,"#9AA3B5");prect(c,x-2,y+3,1,1,"#D9DEE8");prect(c,x+2,y+3,1,1,"#D9DEE8");prect(c,x,y-1,1,1,"#5C5C7A")}
+function drawLure(c,o,X,Y,sc,lvl,now,ph){const kind=lureKind(L.center.virtual?o:L.center),rows=SPR[kind]||SPR.bass,sw=rows[0].length,sh=rows.length,img=sprImg(kind,false);
+  const W=Math.round(sw*sc),Hh=Math.round(sh*sc),x0=Math.round(X-W/2),wig=lvl?0:Math.round(Math.sin(now/260+ph)*1),y0=Math.round(Y)+wig;
+  // line from the float down to the nose (head is on the left of the sprite)
+  const nx=x0+1,ny=y0+Math.round(Hh*.42);
+  if(lvl){prect(c,nx-3,ny-1,3,3,"#9AA3B5");prect(c,nx-2,ny,1,1,"#241527")}
+  c.drawImage(img,x0,y0,W,Hh);
+  if(lvl>=1){// metal lip under the chin
+    c.fillStyle="rgba(217,222,232,.85)";c.beginPath();c.moveTo(x0+2,y0+Hh*.55);c.lineTo(x0-7,y0+Hh*.8);c.lineTo(x0-5,y0+Hh+2);c.lineTo(x0+5,y0+Hh*.75);c.closePath();c.fill();prect(c,x0-6,Math.round(y0+Hh*.95),2,1,"#FFFFFF")}
+  if(lvl>=2)hook(c,x0+Math.round(W*.38),y0+Hh,now,ph);
+  if(lvl>=3){hook(c,x0+Math.round(W*.78),y0+Hh-1,now,ph+1);for(let j=1;j<Hh-1;j+=2)prect(c,x0+Math.round(W*.55),y0+j,1,1,"rgba(36,21,39,.55)");prect(c,x0+Math.round(W*.55)-1,y0+Math.round(Hh/2),3,1,"#9AA3B5")}
+  return{nx:lvl?nx-2:x0+2,ny:lvl?ny:y0+Math.round(Hh*.35),x0,y0,W,Hh}}
 function drawLarp(dt,now){
-  const f=fit($("lc"));if(!f||!L)return;const{x,w,h}=f,k=w/1000,H=h/k;x.clearRect(0,0,w,h);x.save();x.scale(k,k);
+  const R=lowres($("lc"),320);if(!R||!L)return;const{c,LW,LH}=R,H0=24,floorY=LH-6;
   L.run=Math.min(1,(L.run||0)+dt/1.6);const ease=1-Math.pow(1-L.run,3);
-  const lanes=[L.center,...L.nodes.map(n=>n.o).sort((a,b)=>(b===L.t)-(a===L.t)||b.larp.score-a.larp.score)].slice(0,8);
-  const X0=196,X1=990,Y0=152,Y1=H-92,lw=(X1-X0)/(lanes.length+1),zh=(Y1-Y0-24)/LOCI.length;
-  // gel slab
-  x.fillStyle="#EFD9A8";x.fillRect(X0,Y0,X1-X0,Y1-Y0);const rn=seeded("gel");x.fillStyle="#E2C898";for(let i=0;i<900;i++)x.fillRect(X0+rn()*(X1-X0),Y0+rn()*(Y1-Y0),1,1);
-  x.strokeStyle="#3B2416";x.lineWidth=1.4;x.strokeRect(X0,Y0,X1-X0,Y1-Y0);x.lineWidth=.6;x.strokeRect(X0-5,Y0-5,X1-X0+10,Y1-Y0+10);
-  x.font="700 12px IBM Plex Mono, monospace";x.fillStyle="#3B2416";x.textAlign="center";x.fillText("−",X0-14,Y0+10);x.fillText("+",X0-14,Y1-2);
-  x.font="8px IBM Plex Mono, monospace";x.fillStyle="#8A6A48";x.save();x.translate(X0-14,(Y0+Y1)/2);x.rotate(-Math.PI/2);x.fillText("RUN ↓  "+Math.round(ease*100)+"%",0,0);x.restore();
-  // loci zones + labels
-  LOCI.forEach((Lc,i)=>{const zt=Y0+18+i*zh;x.strokeStyle="#DCC08F";x.lineWidth=.6;x.setLineDash([2,3]);x.beginPath();x.moveTo(X0,zt);x.lineTo(X1,zt);x.stroke();x.setLineDash([]);
-    x.textAlign="left";x.fillStyle="#3B2416";x.font="600 9px IBM Plex Mono, monospace";x.fillText(Lc.k,14,zt+zh/2);x.fillStyle="#8A6A48";x.font="8px IBM Plex Mono, monospace";x.fillText(Lc.d,14,zt+zh/2+11);
-    x.fillStyle=Lc.look?"#3B2416":"#8A6A48";x.fillText(Lc.look?"LOOK":"SUBSTANCE",120,zt+zh/2);
-    // reference line at the original's band
-    const rp=bandPos(Lc,L.center);if(rp!=null){const ry=zt+4+rp*(zh-8);x.strokeStyle="rgba(59,36,22,.35)";x.lineWidth=.8;x.beginPath();x.moveTo(X0+lw*1.5,ry);x.lineTo(X1-4,ry);x.stroke()}});
-  // ladder lane
-  const lx=X0+lw*.5;x.fillStyle="#3B2416";x.font="600 9px IBM Plex Mono, monospace";x.textAlign="center";x.fillText("LADDER",lx,Y0-30);
-  for(let i=0;i<LOCI.length;i++)for(let q=0;q<5;q++){const zt=Y0+18+i*zh,y=zt+4+(.1+q*.2)*(zh-8)*ease+(1-ease)*(Y0+10-zt);x.fillStyle=`rgba(59,36,22,${.18+q*.05})`;x.fillRect(lx-lw*.28,y-1,lw*.56,2)}
-  // lanes
-  lanes.forEach((o,li)=>{const cx=X0+lw*(li+1.5),bw=lw*.62,isT=o===L.t,isC=li===0;
-    if(isT){x.fillStyle="rgba(59,36,22,.05)";x.fillRect(cx-lw/2+2,Y0+1,lw-4,Y1-Y0-2);x.strokeStyle="#3B2416";x.lineWidth=1;x.beginPath();x.moveTo(cx-lw/2+4,Y0-4);x.lineTo(cx-lw/2+4,Y1+4);x.moveTo(cx+lw/2-4,Y0-4);x.lineTo(cx+lw/2-4,Y1+4);x.stroke()}
-    // well
-    x.strokeStyle="#3B2416";x.lineWidth=1;x.fillStyle="#F6E7C1";x.fillRect(cx-bw/2,Y0+5,bw,8);x.strokeRect(cx-bw/2,Y0+5,bw,8);
-    // header
-    x.textAlign="center";const hy=Y0-42;if(isT){x.fillStyle="#3B2416";x.fillRect(cx-lw/2+4,hy-13,lw-8,18);x.fillStyle="#F6E7C1"}else x.fillStyle="#3B2416";
-    x.font="700 10px IBM Plex Mono, monospace";x.fillText((isC?(o.virtual?"BRAND ":"ORIG "):"")+o.sym,cx,hy);
-    x.fillStyle="#8A6A48";x.font="8px IBM Plex Mono, monospace";x.fillText(o.virtual?"no token":short8(o.id),cx,hy+14);
-    if(!o.virtual){x.fillText(isC?"reference":"LARP "+o.larp.score,cx,hy+24)}
-    if(isT){x.fillStyle="#3B2416";x.beginPath();x.moveTo(cx,Y0-6);x.lineTo(cx-4,Y0-12);x.lineTo(cx+4,Y0-12);x.fill()}
-    // bands
-    let same=0,diff=0,shown=0;
-    LOCI.forEach((Lc,i)=>{const p2=bandPos(Lc,o);if(p2==null){if(o.virtual)return;return}const zt=Y0+18+i*zh,ty=zt+4+p2*(zh-8),y=Y0+12+(ty-Y0-12)*Math.min(1,ease*(1+i*.04));
-      const match=!isC&&Lc.m(o,L.center),strength=Lc.k==="DEPTH"?.5+.5*(o.e5>0?Math.min(1,Math.log10(1+o.e5)/6):.1):1;
-      if(!isC){shown++;if(match)same++;else diff++}
-      for(let q=5;q>=0;q--){x.fillStyle=`rgba(59,36,22,${(.08+(q===0?.55:0))*strength})`;x.fillRect(cx-bw/2-q,y-1.5-q*.7,bw+q*2,3+q*1.4)}
-      if(!isC&&L.run>=1){x.font="700 9px IBM Plex Mono, monospace";x.textAlign="left";x.fillStyle="#3B2416";x.fillText(match?"=":"≠",cx+bw/2+3,y+3)}});
-    if(!isC&&L.run>=1){x.textAlign="center";x.font="8px IBM Plex Mono, monospace";x.fillStyle="#3B2416";x.fillText(`copied ${same}/${shown}`,cx,Y1+14);x.fillStyle="#8A6A48";x.fillText(`differs ${diff}`,cx,Y1+24)}
-    if(isC&&L.run>=1){x.textAlign="center";x.font="8px IBM Plex Mono, monospace";x.fillStyle="#8A6A48";x.fillText(o.virtual?"brand only":"reference",cx,Y1+14)}});
-  if(!L.nodes.length){x.fillStyle="#8A6A48";x.font="9px IBM Plex Mono, monospace";x.textAlign="center";x.fillText("no copies, look-alikes or brand borrowers found for this token",(X0+X1)/2+lw,Y1-16)}
-  // LARP gauge
-  const sc=L.t.larp.score/100;L.gauge+=(sc-L.gauge)*Math.min(1,dt*3);const gx=58,gy=H-46,gr=26;
-  for(let k2=0;k2<=40;k2++){const a=Math.PI*.85+k2/40*Math.PI*1.3,l=k2%8?3:6;x.strokeStyle="#3B2416";x.lineWidth=k2%8?.6:1.2;x.beginPath();x.moveTo(gx+Math.cos(a)*gr,gy+Math.sin(a)*gr);x.lineTo(gx+Math.cos(a)*(gr-l),gy+Math.sin(a)*(gr-l));x.stroke()}
-  x.lineWidth=3;x.beginPath();x.arc(gx,gy,gr+4,Math.PI*.85,Math.PI*.85+L.gauge*Math.PI*1.3);x.stroke();x.lineWidth=.6;x.beginPath();x.arc(gx,gy,gr+4,Math.PI*.85,Math.PI*2.15);x.stroke();
-  const na=Math.PI*.85+L.gauge*Math.PI*1.3;x.lineWidth=1.4;x.beginPath();x.moveTo(gx,gy);x.lineTo(gx+Math.cos(na)*(gr-4),gy+Math.sin(na)*(gr-4));x.stroke();x.fillStyle="#3B2416";x.beginPath();x.arc(gx,gy,2.6,0,7);x.fill();
-  x.font="700 15px IBM Plex Mono, monospace";x.textAlign="center";x.fillText(Math.round(L.gauge*100),gx,gy+22);x.font="8px IBM Plex Mono, monospace";x.fillText("LARP SCORE",gx,gy+32);
-  x.textAlign="left";x.font="600 9px IBM Plex Mono, monospace";x.fillText(L.t.larp.verdict,gx+40,gy-2);x.font="8px IBM Plex Mono, monospace";x.fillStyle="#8A6A48";
-  x.fillText(L.center.virtual?`brand ${L.center.sym} · ${L.nodes.length} tokens borrow it`:`${L.center.canon} family · ${L.nodes.length+1} tokens`,gx+40,gy+10);
-  x.restore();
+  seaBase(c,LW,LH,now,H0,floorY,{});
+  const lanes=[L.center,...L.nodes.map(n=>n.o).sort((a,b)=>(b===L.t)-(a===L.t)||b.larp.score-a.larp.score)].slice(0,6);
+  const X0=62,X1=LW-6,lw=(X1-X0)/lanes.length,sc=Math.max(1,Math.min(2,(lw-10)/20)),FY=60,RY=104,rh=10,GAP=9,rowY=i=>RY+i*rh+(i>=4?GAP:0);
+  // row bands for the trait table
+  LOCI.forEach((Lc,i)=>{const y=rowY(i);c.fillStyle=i%2?"rgba(10,22,64,.30)":"rgba(10,22,64,.45)";c.fillRect(4,y,LW-8,rh)});
+  c.fillStyle="rgba(36,21,39,.55)";c.fillRect(4,RY-GAP,LW-8,GAP);c.fillRect(4,RY+4*rh,LW-8,GAP);
+  const out=[];
+  lanes.forEach((o,li)=>{const cx=Math.round(X0+lw*(li+.5)),isC=li===0,isT=o===L.t,lvl=isC?0:o.larp.score>=60?3:o.larp.score>=35?2:1;
+    if(isT){c.fillStyle="rgba(255,210,63,.13)";c.fillRect(Math.round(cx-lw/2)+1,H0+2,Math.round(lw)-2,RY-GAP-H0-2);for(let y=H0+2;y<RY-GAP;y+=3){prect(c,Math.round(cx-lw/2)+1,y,1,1,"#FFD23F");prect(c,Math.round(cx+lw/2)-2,y,1,1,"#FFD23F")}}
+    // float at the surface, line down
+    const drop=Math.round((1-ease)*30),fy=H0-3+Math.round(Math.sin(now/500+li)*1);
+    let r;if(o.virtual){spr(c,"sil",cx-10,FY-drop);r={nx:cx-9,ny:FY-drop+3}}else r=drawLure(c,o,cx,FY-drop,sc,lvl,now,li);
+    c.strokeStyle="rgba(255,255,255,.55)";c.lineWidth=1;c.beginPath();c.moveTo(cx+.5,fy+4);c.lineTo(r.nx+.5,r.ny+.5);c.stroke();
+    spr(c,"bobber",cx-3,fy-2);
+    if(isC&&!o.virtual&&Math.sin(now/700)>0){const b=((now/900)%1);prect(c,r.x0-3,Math.round(r.y0-b*14),2,2,`rgba(255,255,255,${(1-b).toFixed(2)})`)}
+    // trait marks
+    if(L.run>=1)LOCI.forEach((Lc,i)=>{const y=rowY(i)+1;if(isC){prect(c,cx-3,y+3,7,1,"rgba(255,246,220,.6)");return}const p2=bandPos(Lc,o);if(p2==null&&Lc.k==="BRAND"&&!(L.center.larp&&L.center.larp.brand)){prect(c,cx-3,y+3,7,1,"rgba(255,246,220,.35)");return}mark(c,cx-3,y,Lc.m(o,L.center))});
+    out.push({o,cx,isC,isT,lvl});
+  });
+  // magnifier sweeping the copies
+  if(lanes.length>1&&L.run>=1){const n=lanes.length-1,per=1.8,t2=now/1000/per,i=Math.floor(t2)%n,f=t2%1,mv=Math.min(1,f*3),from=1+((i-1+n)%n),to=1+i;
+    const mx=Math.round(X0+lw*((from+(to-from)*(1-Math.pow(1-mv,3)))+.5)),my=FY+4;c.strokeStyle="#FFF6DC";c.lineWidth=2;c.beginPath();c.arc(mx,my,12,0,7);c.stroke();c.strokeStyle="#241527";c.lineWidth=1;c.beginPath();c.arc(mx,my,14,0,7);c.stroke();
+    c.fillStyle="rgba(191,239,255,.18)";c.beginPath();c.arc(mx,my,11,0,7);c.fill();for(let k=0;k<6;k++)prect(c,mx+10+k,my+10+k,3,3,k<1?"#241527":"#8B5A2B");
+    const tl=lanes[to];if(mv>=1&&tl.larp&&tl.larp.score>=35&&Math.floor(now/150)%2)L.hookAt={x:Math.min(LW-20,mx+26),y:my-6};else L.hookAt=null}
+  // overlay text (crisp)
+  const f=fit($("lcx"));if(!f)return;const{x,w}=f,K=w/LW,fs=Math.max(10,Math.min(17,w/68));x.clearRect(0,0,w,f.h);
+  LOCI.forEach((Lc,i)=>pxText(x,Lc.k,8*K,(rowY(i)+7.4)*K,fs*.62,i<4?"#FFF6DC":"#BDF4FF","left"));
+  pxText(x,"THE PAINT · WHAT A COPY CAN FAKE",8*K,(RY-2)*K,fs*.55,"#FFD23F","left");pxText(x,"UNDER THE PAINT · WHAT IT CAN'T FAKE",8*K,(RY+4*rh+GAP-2)*K,fs*.55,"#FFD23F","left");
+  out.forEach(({o,cx,isC,isT,lvl})=>{const sym=o.sym.length>8?o.sym.slice(0,7)+"…":o.sym;
+    pxText(x,sym,cx*K,(FY-14)*K,fs*.75,isT?"#241527":"#FFF6DC","center",isT?"#FFD23F":"rgba(36,21,39,.75)");
+    const sub=isC?(o.virtual?"BRAND":"REAL FISH"):"LARP "+o.larp.score;pxText(x,sub,cx*K,(FY+28)*K,fs*.58,isC?"#FFFFFF":o.larp.score>=60?"#FFFFFF":o.larp.score>=35?"#241527":"#FFFFFF","center",isC?"#2E7D46":o.larp.score>=60?"#D7263D":o.larp.score>=35?"#FFD23F":"rgba(36,21,39,.6)")});
+  if(L.hookAt)pxText(x,"HOOK!",L.hookAt.x*K,L.hookAt.y*K,fs*.7,"#FFFFFF","center","#D7263D");
+  if(!L.nodes.length)pxText(x,"NO LURES FOUND · NOBODY COPIES THIS FISH",(X0+lw*.5)*K,(FY+40)*K,fs*.6,"#FFF6DC","center","rgba(36,21,39,.75)");
+  // bait meter
+  const sc2=L.t.larp.score/100;L.gauge+=(sc2-L.gauge)*Math.min(1,dt*3);const by=LH-5;
+  pxText(x,`BAIT METER ${Math.round(L.gauge*100)}/100 · ${L.t.larp.verdict}`,(LW-8)*K,(by-1)*K,fs*.62,L.gauge>=.6?"#FFFFFF":L.gauge>=.35?"#241527":"#FFF6DC","right",L.gauge>=.6?"#D7263D":L.gauge>=.35?"#FFD23F":"rgba(36,21,39,.75)");
 }
 function setView(v){VIEW=v;document.querySelectorAll(".tabs button").forEach(b=>b.classList.toggle("on",b.dataset.v===v));for(const k of["check","larp","seis","aut","swap","road"])$("v-"+k).hidden=v!==k;document.body.classList.toggle("road",v==="road");
-  $("labname").textContent={larp:"IDENTITY LAB",seis:"SHARK WATCH",aut:"FORENSIC LAB",swap:"SWAP LAB",road:"ROADMAP"}[v]||"LIQUIDITY LAB";if(v==="swap"&&S.sel)swapRun(S.sel);chips();if(v==="check"&&T){drawStatic();layoutTags()}if(v==="larp"&&S.sel)larpRender(S.sel);if(v==="seis")seisPanels();if(v==="aut"&&S.sel)autopsy(S.sel);
+  $("labname").textContent={larp:"LURE LAB",seis:"SHARK WATCH",aut:"FORENSIC LAB",swap:"SWAP LAB",road:"ROADMAP"}[v]||"LIQUIDITY LAB";if(v==="swap"&&S.sel)swapRun(S.sel);chips();if(v==="check"&&T){drawStatic();layoutTags()}if(v==="larp"&&S.sel)larpRender(S.sel);if(v==="seis")seisPanels();if(v==="aut"&&S.sel)autopsy(S.sel);
   try{history.replaceState(null,"",v==="check"?location.pathname:"#"+v)}catch(_){}}
 document.querySelector(".tabs").addEventListener("click",e=>{const b=e.target.closest("button[data-v]");if(b){S.lastTouch=performance.now();setView(b.dataset.v)}});
 
