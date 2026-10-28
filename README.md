@@ -107,6 +107,7 @@ DexPaprika hanya mengindeks Uniswap V2/V3/V4 di Robinhood Chain, jadi token yang
 
 - **Pons V2**: event `TokenLaunched` di factory `0x7ed598bc…7ec7e`, lalu `CurveBuy`/`CurveSell` di kontrak curve tiap token. Dari situ FISHY menghitung harga, market cap (dalam USD lewat harga WETH dari DexPaprika) dan progres menuju graduation (`BONDING 25%`).
 - **Flap dan launchpad lain** (hood.fun, LaunchHood, Virtuals, Klik, Doppler, Ape.store, Bags, Clanker, pools.trade, trench): token ERC-20 baru yang di-mint ke kontrak launchpad, atau di transaksi yang dikirim ke kontrak launchpad (aturan yang sama dipakai Bitquery). Token Flap juga dikenali dari alamat vanity `8888`/`7777`.
+- Progres bonding (`BONDING 31%` · `1.30/4.20 ETH`) dibaca dari saldo ETH/quote token di kontrak curve, jadi tetap benar walau trade-nya terjadi sebelum server menyala. Market cap dihitung dari harga trade terakhir di curve (kosong `—` kalau belum ada trade sejak server menyala).
 - Token yang sudah punya pool di DexPaprika ditandai **GRADUATED**, tapi tombolnya tetap ke launchpad asalnya.
 - Saat start, scanner membaca mundur `LAUNCH_BACKFILL_BLOCKS` blok (default 60.000). Ukuran range `eth_getLogs` otomatis mengecil kalau RPC menolak range besar.
 - Status scanner: `GET /api/launchpads` (blok terakhir, jumlah token, error terakhir). Kalau `tracked` tetap 0 dan ada `lastError`, RPC publik kemungkinan membatasi `eth_getLogs`: pakai RPC privat (Alchemy/QuickNode/dll) di `RPC_URL`.

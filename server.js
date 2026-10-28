@@ -200,7 +200,12 @@ function mergeLaunches(dexList, pools) {
   const onDex = new Set();
   for (const p of pools) { onDex.add(String(p.a.id).toLowerCase()); onDex.add(String(p.b.id).toLowerCase()); }
   const byId = new Map(dexList.map((t) => [String(t.id).toLowerCase(), t]));
-  for (const l of launchpads.list(quoteUsdOf("WETH"), onDex)) {
+  const priceOf = (addr, sym) => {
+    if (!addr) return quoteUsdOf(sym);
+    const a = addr.toLowerCase(), p = pools.filter((x) => String(x.a.id).toLowerCase() === a && x.price > 0).sort((x, y) => y.liq - x.liq)[0];
+    return p ? p.price : quoteUsdOf(sym);
+  };
+  for (const l of launchpads.list(priceOf, onDex)) {
     const d = byId.get(l.id);
     if (d) { d.src = l.src; d.srcName = l.srcName; d.status = "dex"; continue; } // graduated: keep DEX numbers, label the launchpad
     byId.set(l.id, l);

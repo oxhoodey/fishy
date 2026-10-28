@@ -37,6 +37,7 @@ const CFG = {
   txLookups: +process.env.LAUNCH_TX_LOOKUPS || 40,
   metaPerScan: +process.env.LAUNCH_META_PER_SCAN || 40,
   maxRange: +process.env.LAUNCH_MAX_RANGE || 20000,
+  balancePerScan: +process.env.LAUNCH_BALANCES_PER_SCAN || 120,
 };
 const S = { last: 0, range: CFG.maxRange, launches: new Map(), curves: new Map(), times: new Map(), meta: new Map(), errors: 0, lastError: null, scannedAt: null };
 
@@ -97,52 +98,88 @@ function addLaunch(token, pad, block, extra) {
   if (S.launches.size > CFG.keep) { const old = [...S.launches.values()].sort((a, b) => a.block - b.block)[0]; S.launches.delete(old.id); if (old.curve) S.curves.delete(old.curve); }
 }
 
+// each step keeps its own block cursor, so one failing query (e.g. an RPC that rejects big log filters) never blocks the others
+const CUR = { launch: 0, mint: 0, trades: 0 };
+function fail(step, e) { S.errors++; S.lastError = step + ": " + String(e.message || e).slice(0, 200); console.warn("launchpad scan", S.lastError); }
+
+async function scanLaunches(latest) {
+  const from = CUR.launch ? CUR.launch + 1 : Math.max(1, latest - CFG.backfill);
+  if (from > latest) return;
+  for (const log of await getLogs({ address: PONS_FACTORY, topics: [T_LAUNCH] }, from, latest)) {
+    const w = words(log);
+    if (w.length < 6) continue;
+    addLaunch(addrOf(w[0]), PADS[0], hexToInt(log.blockNumber), { curve: addrOf(w[1]), deployer: addrOf(w[2]), pairToken: addrOf(w[3]), threshold: BigInt(w[5]), netQuote: 0n, lastPrice: null, trades: 0 });
+  }
+  CUR.launch = latest;
+}
+async function scanMints(latest) {
+  const from = CUR.mint ? CUR.mint + 1 : Math.max(1, latest - CFG.backfill);
+  if (from > latest) return;
+  let lookups = 0;
+  for (const log of await getLogs({ topics: [T_TRANSFER, ZERO32] }, from, latest)) {
+    if (log.topics.length !== 3) continue; // ERC-721 mints carry a 4th topic
+    const token = log.address.toLowerCase();
+    if (S.launches.has(token) || BY_ADDR.has(token)) continue;
+    let pad = BY_ADDR.get(addrOf(log.topics[2]));
+    if (!pad && /(7777|8888)$/.test(token)) pad = PADS.find((p) => p.key === "flap");
+    if (!pad && lookups < CFG.txLookups) {
+      lookups++;
+      try { const tx = await rpc("eth_getTransactionByHash", [log.transactionHash]); if (tx && tx.to) pad = BY_ADDR.get(tx.to.toLowerCase()); } catch (_) {}
+    }
+    if (pad) addLaunch(token, pad, hexToInt(log.blockNumber), {});
+  }
+  CUR.mint = latest;
+}
+function applyTrade(log) {
+  const L = S.launches.get(S.curves.get(String(log.address).toLowerCase()));
+  if (!L) return;
+  const w = words(log);
+  if (w.length < 4) return;
+  const buy = log.topics[0] === T_BUY, q = BigInt(buy ? w[2] : w[3]), tok = BigInt(buy ? w[3] : w[2]);
+  L.netQuote = (L.netQuote || 0n) + (buy ? q : -q);
+  if (tok > 0n) L.lastPrice = { q, tok };
+  L.trades = (L.trades || 0) + 1;
+  S.tradeLogs = (S.tradeLogs || 0) + 1;
+}
+async function scanTrades(latest) {
+  if (!S.curves.size) { CUR.trades = latest; return; }
+  const from = CUR.trades ? CUR.trades + 1 : Math.max(1, latest - CFG.backfill);
+  if (from > latest) return;
+  // every curve trade on the chain by topic, then keep the ones from curves we know (Bitquery's recommended filter)
+  let logs;
+  try { logs = await getLogs({ topics: [[T_BUY, T_SELL]] }, from, latest); }
+  catch (e) {
+    logs = [];
+    const curves = [...S.curves.keys()];
+    for (let i = 0; i < curves.length; i += 20) logs.push(...(await getLogs({ address: curves.slice(i, i + 20), topics: [[T_BUY, T_SELL]] }, from, latest)));
+  }
+  for (const log of logs) applyTrade(log);
+  CUR.trades = latest;
+}
+// the curve's live quote balance = quote raised so far (Bitquery: same figure as buys - sells). Works even for trades before our backfill window.
+async function readCurveBalances() {
+  const open = [...S.launches.values()].filter((l) => l.curve && l.threshold > 0n && !l.graduated).sort((a, b) => b.block - a.block).slice(0, CFG.balancePerScan);
+  for (let i = 0; i < open.length; i += 8) {
+    await Promise.all(open.slice(i, i + 8).map(async (l) => {
+      try {
+        const native = !l.pairToken || /^0x0{40}$/.test(l.pairToken);
+        const r = native ? await rpc("eth_getBalance", [l.curve, "latest"])
+          : await rpc("eth_call", [{ to: l.pairToken, data: "0x70a08231" + l.curve.slice(2).padStart(64, "0") }, "latest"]);
+        if (r && r !== "0x") l.quoteBal = BigInt(r);
+      } catch (_) {}
+    }));
+  }
+}
+
 async function scan() {
   const latest = hexToInt(await rpc("eth_blockNumber", []));
-  const from = S.last ? S.last + 1 : Math.max(1, latest - CFG.backfill);
-  if (from > latest) return;
-  try {
-    // 1) Pons V2 launches
-    for (const log of await getLogs({ address: PONS_FACTORY, topics: [T_LAUNCH] }, from, latest)) {
-      const w = words(log);
-      if (w.length < 6) continue;
-      addLaunch(addrOf(w[0]), PADS[0], hexToInt(log.blockNumber), { curve: addrOf(w[1]), deployer: addrOf(w[2]), pairToken: addrOf(w[3]), threshold: BigInt(w[5]), netQuote: 0n, lastPrice: null, trades: 0 });
-    }
-    // 2) everyone else: fresh ERC-20 mints tied to a launchpad contract
-    let lookups = 0;
-    for (const log of await getLogs({ topics: [T_TRANSFER, ZERO32] }, from, latest)) {
-      if (log.topics.length !== 3) continue; // ERC-721 mints carry a 4th topic
-      const token = log.address.toLowerCase();
-      if (S.launches.has(token) || BY_ADDR.has(token)) continue;
-      let pad = BY_ADDR.get(addrOf(log.topics[2]));
-      if (!pad && /(7777|8888)$/.test(token)) pad = PADS.find((p) => p.key === "flap");
-      if (!pad && lookups < CFG.txLookups) {
-        lookups++;
-        try { const tx = await rpc("eth_getTransactionByHash", [log.transactionHash]); if (tx && tx.to) pad = BY_ADDR.get(tx.to.toLowerCase()); } catch (_) {}
-      }
-      if (pad) addLaunch(token, pad, hexToInt(log.blockNumber), {});
-    }
-    // 3) Pons curve trades -> price, net quote raised, progress to graduation
-    const curves = [...S.curves.keys()];
-    for (let i = 0; i < curves.length; i += 50) {
-      for (const log of await getLogs({ address: curves.slice(i, i + 50), topics: [[T_BUY, T_SELL]] }, from, latest)) {
-        const L = S.launches.get(S.curves.get(log.address.toLowerCase()));
-        if (!L) continue;
-        const w = words(log);
-        if (w.length < 4) continue;
-        const buy = log.topics[0] === T_BUY, q = BigInt(buy ? w[2] : w[3]), tok = BigInt(buy ? w[3] : w[2]);
-        L.netQuote = (L.netQuote || 0n) + (buy ? q : -q);
-        if (tok > 0n) L.lastPrice = { q, tok };
-        L.trades = (L.trades || 0) + 1;
-      }
-    }
-    S.last = latest;
-    S.lastError = null;
-  } catch (e) {
-    S.errors++; S.lastError = String(e.message || e);
-    console.warn("launchpad scan:", S.lastError);
-  }
-  // 4) names, symbols, supply, launch time for the newest tokens
+  S.lastError = null;
+  try { await scanLaunches(latest); } catch (e) { fail("pons launches", e); }
+  try { await scanMints(latest); } catch (e) { fail("launchpad mints", e); }
+  try { await scanTrades(latest); } catch (e) { fail("curve trades", e); }
+  try { await readCurveBalances(); } catch (e) { fail("curve balances", e); }
+  S.last = latest;
+  // names, symbols, supply, launch time for the newest tokens
   const todo = [...S.launches.values()].filter((l) => !l.sym).sort((a, b) => b.block - a.block).slice(0, CFG.metaPerScan);
   for (let i = 0; i < todo.length; i += 6) {
     await Promise.all(todo.slice(i, i + 6).map(async (l) => {
@@ -150,7 +187,7 @@ async function scan() {
         const m = await erc20Meta(l.id);
         l.sym = m.symbol || l.id.slice(0, 6) + "…" + l.id.slice(-4); l.name = m.name || l.sym; l.decimals = m.decimals; l.supply = m.supply;
         l.created = new Date(await blockTime(l.block)).toISOString();
-        if (l.pairToken && !l.pairSym) l.pairSym = (await erc20Meta(l.pairToken)).symbol || "ETH";
+        if (l.pairToken && !l.pairSym) { const pm = /^0x0{40}$/.test(l.pairToken) ? { symbol: "ETH", decimals: 18 } : await erc20Meta(l.pairToken); l.pairSym = pm.symbol || "?"; l.pairDec = pm.decimals == null ? 18 : pm.decimals; }
       } catch (_) {}
     }));
   }
@@ -158,26 +195,30 @@ async function scan() {
 }
 
 // usd value of one unit of the pair token (ETH/WETH -> ethUsd, stables -> 1)
+// ethUsd: number, or a function (address, symbol) -> usd price from DexPaprika pools (covers stock tokens like SPCX/QQQ)
 function quoteUsd(l, ethUsd) {
-  const s = String(l.pairSym || "").toUpperCase();
-  if (!l.pairToken || /^0x0{40}$/.test(l.pairToken) || s === "WETH" || s === "ETH") return ethUsd || 0;
+  const s = String(l.pairSym || "").toUpperCase(), fn = typeof ethUsd === "function" ? ethUsd : null;
+  if (!l.pairToken || /^0x0{40}$/.test(l.pairToken) || s === "WETH" || s === "ETH") return (fn ? fn(null, "WETH") : ethUsd) || 0;
   if (["USDG", "USDC", "USDT", "DAI", "USDE"].includes(s)) return 1;
-  return 0;
+  return (fn && fn(l.pairToken, s)) || 0;
 }
 function list(ethUsd, onDex) {
   return [...S.launches.values()].filter((l) => l.sym && l.created).map((l) => {
     const graduated = onDex && onDex.has(l.id);
-    let mc = null, progress = null;
-    if (l.lastPrice && l.supply) {
-      const price = Number(l.lastPrice.q) / 1e18 / (Number(l.lastPrice.tok) / 10 ** (l.decimals || 18));
-      const usd = quoteUsd(l, ethUsd);
-      if (usd) mc = price * usd * (Number(l.supply) / 10 ** (l.decimals || 18));
+    if (graduated) l.graduated = true;
+    const qd = 10 ** (l.pairDec == null ? 18 : l.pairDec), td = 10 ** (l.decimals || 18);
+    let mc = null, progress = null, raised = null, target = null;
+    const usd = quoteUsd(l, ethUsd);
+    if (l.lastPrice && l.supply && usd) mc = (Number(l.lastPrice.q) / qd) / (Number(l.lastPrice.tok) / td) * usd * (Number(l.supply) / td);
+    if (l.threshold && l.threshold > 0n) {
+      const got = l.quoteBal != null ? l.quoteBal : l.netQuote > 0n ? l.netQuote : 0n;
+      raised = Number(got) / qd; target = Number(l.threshold) / qd;
+      progress = Math.max(0, Math.min(1, raised / target));
     }
-    if (l.threshold && l.threshold > 0n) progress = Math.max(0, Math.min(1, Number(l.netQuote || 0n) / Number(l.threshold)));
-    return { id: l.id, sym: l.sym, name: l.name, created: l.created, src: l.pad, srcName: l.padName, status: graduated ? "dex" : "bonding", progress, mc, liq: null, pair: l.pairSym || "", trades: l.trades || 0 };
+    return { id: l.id, sym: l.sym, name: l.name, created: l.created, src: l.pad, srcName: l.padName, status: graduated ? "dex" : "bonding", progress, raised, target, mc, liq: null, pair: l.pairSym || "", trades: l.trades || 0 };
   });
 }
 const known = (addr) => { const l = S.launches.get(String(addr).toLowerCase()); return l ? { src: l.pad, srcName: l.padName } : null; };
-const status = () => ({ last: S.last, range: S.range, tracked: S.launches.size, curves: S.curves.size, errors: S.errors, lastError: S.lastError, scannedAt: S.scannedAt, pads: PADS.map((p) => p.key) });
+const status = () => ({ cursors: CUR, tradeLogs: S.tradeLogs || 0, withBalance: [...S.launches.values()].filter((l) => l.quoteBal > 0n).length, last: S.last, range: S.range, tracked: S.launches.size, curves: S.curves.size, errors: S.errors, lastError: S.lastError, scannedAt: S.scannedAt, pads: PADS.map((p) => p.key) });
 
 module.exports = { scan, list, known, status, PADS };
