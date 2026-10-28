@@ -72,7 +72,9 @@ Variabel lain (`POOL_PAGES`, `REFRESH_SECONDS`, `MIN_LIQUIDITY`, …) sudah puny
 Catatan:
 - Histori SHARK WATCH (serangan) disimpan di memori, jadi akan kosong lagi setiap redeploy atau restart. Untuk histori permanen, nanti perlu database (misalnya Railway Postgres).
 - `/api/swaptest` sudah diberi cache 60 detik dan batas 4 permintaan bersamaan, supaya RPC publik tidak dibanjiri.
-- Kuota DexPaprika gratis kira-kira 200 ribu request per bulan. Dengan default (`POOL_PAGES=2`, `REFRESH_SECONDS=60`), pemakaiannya sekitar 86 ribu per bulan.
+- Tanpa API key, DexPaprika hanya memberi halaman pertama (100 pool teratas), jadi default-nya `POOL_PAGES=1`. Halaman berikutnya (`cursor`) butuh paket berbayar.
+- Simbol token diambil lewat `detailed=true`. Kalau ada yang masih kosong, server mengambilnya dari endpoint token DexPaprika, maksimal `TOKEN_LOOKUPS_PER_REFRESH` (default 25) per refresh, dan menyimpannya di cache.
+- Dengan default (1 halaman, `REFRESH_SECONDS=60`), pemakaiannya sekitar 43 ribu request per bulan, ditambah beberapa lookup token di awal.
 
 ### Jalankan lokal
 ```bash

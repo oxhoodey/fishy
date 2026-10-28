@@ -10,7 +10,8 @@ const CFG = {
   port: +process.env.PORT || 8787,
   chain: process.env.CHAIN || "robinhood",
   limit: Math.min(100, +process.env.POOL_LIMIT || 100),
-  pages: Math.max(1, +process.env.POOL_PAGES || 2), // 2 pages x 100 pools
+  // DexPaprika pages past the first need a paid key (cursor); without one, stay on page 1
+  pages: Math.max(1, +process.env.POOL_PAGES || (process.env.DEXPAPRIKA_API_KEY ? 2 : 1)),
   refreshMs: (+process.env.REFRESH_SECONDS || 60) * 1000,
   minLiq: +process.env.MIN_LIQUIDITY || 1000,
   turnover: +process.env.TURNOVER || 10,
@@ -20,6 +21,7 @@ const CFG = {
   quakeMinLiq: +process.env.QUAKE_MIN_LIQUIDITY || 2000,
   quakeMinDrop: +process.env.QUAKE_MIN_DROP || 0.3,
   swapPools: +process.env.SWAP_TEST_POOLS || 4,
+  tokenLookups: +process.env.TOKEN_LOOKUPS_PER_REFRESH || 25,
   apiBase: process.env.DEXPAPRIKA_BASE || "https://api.dexpaprika.com",
   apiKey: process.env.DEXPAPRIKA_API_KEY || "",
   apiKeyHeader: process.env.DEXPAPRIKA_API_KEY_HEADER || "authorization",
@@ -43,12 +45,21 @@ const BLUE = new Set(["WETH", "ETH", "WBTC", "CBBTC", "ARB", "LINK", "UNI"]);
 const STOCK = new Set((process.env.STOCK_SYMBOLS || "TSLA,NVDA,AAPL,AMZN,SPY,QQQ,HOOD,MSFT,GOOGL,META,COIN,MSTR,AMD,NFLX,PLTR").split(",").map((s) => s.trim().toUpperCase()));
 const category = (sym) => { const s = String(sym || "").toUpperCase(); return STABLE.has(s) ? "stable" : BLUE.has(s) ? "blue" : STOCK.has(s) ? "stock" : "meme"; };
 
+const TOKEN_META = new Map(); // address(lowercase) -> {symbol, name}
+// Uniswap V4 uses the zero address for native ETH; DexPaprika has no token page for it
+TOKEN_META.set("0x0000000000000000000000000000000000000000", { symbol: "ETH", name: "Ether (native)" });
 const num = (v) => (v == null || v === "" || isNaN(+v) ? null : +v);
 
 function normalize(p) {
   const t = Array.isArray(p.tokens) ? p.tokens : [];
   if (t.length < 2) return null;
-  const tok = (x) => { const sym = String(x.symbol || x.name || "?").slice(0, 16); return { id: String(x.id || x.address || sym), sym, name: String(x.name || sym).slice(0, 48), cat: category(sym) }; };
+  const tok = (x) => {
+    if (typeof x === "string") x = { id: x };
+    const id = String(x.id || x.address || x.token_address || "?"), meta = TOKEN_META.get(id.toLowerCase()) || {};
+    const short = id.length > 12 ? id.slice(0, 6) + "…" + id.slice(-4) : id;
+    const sym = String(x.symbol || meta.symbol || x.name || meta.name || short).slice(0, 16);
+    return { id, sym, name: String(x.name || meta.name || sym).slice(0, 48), cat: category(sym) };
+  };
   return {
     id: String(p.id),
     dex: p.dex_name || p.dex_id || "",
@@ -101,13 +112,42 @@ let snapshot = { chain: CFG.chain, updatedAt: null, error: null, pools: [], inde
 const history = [];
 const clients = new Set();
 
+let warnedPaging = false;
+// fill in symbols for tokens that came back without one (cached; a few lookups per refresh to protect the quota)
+async function enrichTokens(raw) {
+  const missing = new Set();
+  for (const p of raw) for (const x of (Array.isArray(p.tokens) ? p.tokens : [])) {
+    const o = typeof x === "string" ? { id: x } : x || {};
+    const id = String(o.id || o.address || "").toLowerCase();
+    if (!id) continue;
+    if (o.symbol) { if (!TOKEN_META.has(id)) TOKEN_META.set(id, { symbol: o.symbol, name: o.name }); continue; }
+    if (!TOKEN_META.has(id)) missing.add(id);
+  }
+  const todo = [...missing].slice(0, CFG.tokenLookups);
+  for (let i = 0; i < todo.length; i += 5) {
+    await Promise.all(todo.slice(i, i + 5).map(async (id) => {
+      try {
+        const r = await fetch(`${CFG.apiBase}/networks/${encodeURIComponent(CFG.chain)}/tokens/${encodeURIComponent(id)}`, { headers: headers(), signal: AbortSignal.timeout(10000) });
+        if (!r.ok) return;
+        const j = await r.json(), t = j.token || j;
+        if (t && (t.symbol || t.name)) TOKEN_META.set(id, { symbol: t.symbol, name: t.name });
+      } catch (_) {}
+    }));
+  }
+  if (todo.length) console.log(`token lookups: ${todo.length} · known symbols: ${TOKEN_META.size}`);
+}
 async function fetchPools() {
   const all = [];
   let cursor = "";
   for (let i = 0; i < CFG.pages; i++) {
-    const url = `${CFG.apiBase}/pools/search?chains=${encodeURIComponent(CFG.chain)}&order_by=volume_usd_24h&sort=desc&limit=${CFG.limit}${cursor ? "&cursor=" + encodeURIComponent(cursor) : ""}`;
+    // detailed=true makes DexPaprika include token symbol/name in each pool's tokens[]
+    const url = `${CFG.apiBase}/pools/search?chains=${encodeURIComponent(CFG.chain)}&order_by=volume_usd_24h&sort=desc&limit=${CFG.limit}&detailed=true${cursor ? "&cursor=" + encodeURIComponent(cursor) : ""}`;
     const res = await fetch(url, { headers: headers(), signal: AbortSignal.timeout(20000) });
-    if (!res.ok) throw new Error(`DexPaprika ${res.status}`);
+    if (!res.ok) {
+      // the cursor (page 2+) needs a paid API key: keep page 1 instead of failing the whole refresh
+      if (i > 0 && all.length) { if (!warnedPaging) { console.warn(`DexPaprika page ${i + 1} refused (${res.status}); using page 1 only. Set DEXPAPRIKA_API_KEY or POOL_PAGES=1.`); warnedPaging = true; } break; }
+      throw new Error(`DexPaprika ${res.status}`);
+    }
     const json = await res.json();
     all.push(...(json.results || []));
     if (!json.has_next_page || !json.next_cursor) break;
@@ -194,7 +234,9 @@ async function poolOHLCV(id) {
 
 async function refresh() {
   try {
-    const pools = (await fetchPools()).map(normalize).filter(Boolean)
+    const raw = await fetchPools();
+    await enrichTokens(raw);
+    const pools = raw.map(normalize).filter(Boolean)
       .filter((p) => !CFG.excludeStocks || (p.a.cat !== "stock" && p.b.cat !== "stock"));
     if (!pools.length) throw new Error("DexPaprika returned no pools");
     const exits = tokenExits(pools);
