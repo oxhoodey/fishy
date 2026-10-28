@@ -39,7 +39,9 @@ const CFG = {
     explorer: (process.env.EXPLORER_URL || "").replace(/\/$/, ""),
     buyUrl: process.env.BUY_URL || "",
     // {ca} is replaced by the token address; check the format on Pons and change it in Railway if needed
-    ponsUrl: process.env.PONS_TOKEN_URL || "https://ponsfamily.com/token/{ca}",
+    ponsUrl: process.env.PONS_TOKEN_URL || "https://ponsfamily.com/launchpad/{ca}",
+    flapUrl: process.env.FLAP_TOKEN_URL || "https://flap.sh/robinhood/{ca}",
+    dexUrl: process.env.DEX_TOKEN_URL || "https://dexpaprika.com/robinhood/token/{ca}",
   },
 };
 
@@ -158,10 +160,37 @@ async function lookupToken(addr) {
   const raw = j.results || [];
   await enrichTokens(raw);
   const pools = raw.map(normalize).filter(Boolean);
-  const d = { address: addr, pools, updatedAt: new Date().toISOString() };
+  const d = { address: addr, pools, src: await classifyToken(addr, pools[0] && pools[0].dex), updatedAt: new Date().toISOString() };
   LOOKUP_CACHE.set(addr, { t: Date.now(), d });
   if (LOOKUP_CACHE.size > 300) LOOKUP_CACHE.delete(LOOKUP_CACHE.keys().next().value);
   return d;
+}
+// where a token was launched: Pons (graduationStatus on the Pons factory/locker), Flap (vanity 8888/7777 addresses, per Flap docs) or straight on a DEX
+const PONS_CONTRACTS = (process.env.PONS_CONTRACTS || "0xA5aAb3F0c6EeadF30Ef1D3Eb997108E976351feB,0x736D76699C26D0d966744cAe304C000d471f7F35,0x0c37a24F5D23A486FA692d1500881d698B1F77a4,0x31ca5E101941A93A7DD6d0497928700625CF54B5")
+  .split(",").map((x) => x.trim()).filter(Boolean);
+const GRAD_SEL = swaptest.selector("graduationStatus(address)");
+const SRC_CACHE = new Map();
+async function classifyToken(addr, dex) {
+  const a = String(addr).toLowerCase(), hit = SRC_CACHE.get(a);
+  if (hit && (hit.src !== "dex" || Date.now() - hit.t < 30 * 60000)) return hit.src;
+  let src = "dex";
+  if (/pons/i.test(dex || "")) src = "pons";
+  else if (/flap/i.test(dex || "") || /(7777|8888)$/.test(a)) src = "flap";
+  else if (/^0x[0-9a-f]{40}$/.test(a)) {
+    for (const c of PONS_CONTRACTS) {
+      try {
+        const r = await swaptest.rpc("eth_call", [{ to: c, data: GRAD_SEL + a.slice(2).padStart(64, "0") }, "latest"]);
+        if (r && r.length >= 2 + 64 * 3 && BigInt("0x" + r.slice(66, 130)) > 0n) { src = "pons"; break; }
+      } catch (_) {}
+    }
+  }
+  SRC_CACHE.set(a, { src, t: Date.now() });
+  if (SRC_CACHE.size > 5000) SRC_CACHE.delete(SRC_CACHE.keys().next().value);
+  return src;
+}
+async function classifyAll(list) {
+  for (let i = 0; i < list.length; i += 6) await Promise.all(list.slice(i, i + 6).map(async (t) => { t.src = await classifyToken(t.id, t.dex); }));
+  return list;
 }
 function newTokenList(pools) {
   const seen = new Set(), out = [];
@@ -290,7 +319,8 @@ async function refresh() {
     const activity = detectQuakes(pools, Date.parse(t));
     history.push({ t, index, activity });
     while (history.length > CFG.historyMax) history.shift();
-    snapshot = { chain: CFG.chain, updatedAt: t, error: null, pools, index, history: history.slice(-288), newTokens: newTokenList(newPools) };
+    const newTokens = await classifyAll(newTokenList(newPools));
+    snapshot = { chain: CFG.chain, updatedAt: t, error: null, pools, index, history: history.slice(-288), newTokens };
     broadcast("pools", snapshot);
     console.log(`[${t}] ${pools.length} pools · index`, index);
   } catch (e) {

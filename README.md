@@ -90,14 +90,25 @@ npm start       # sama seperti produksi
   - simbol dan nama token, dengan label **NEW** kalau umurnya di bawah 1 jam
   - umur, market cap (FDV dari DexPaprika), dan likuiditas
   - CA dengan tombol **COPY**
-  - tombol **CHECK** untuk membuka token itu di CHECK, dan tombol **PONS** untuk membuka halaman token di Pons
-- Link Pons memakai template `PONS_TOKEN_URL` (default `https://ponsfamily.com/token/{ca}`, dengan `{ca}` diganti alamat token). **Cek format URL token di Pons**, lalu ubah variabel ini di Railway kalau berbeda.
+  - tombol **CHECK** untuk membuka token itu di CHECK
+  - tombol **asal token**, yang menyesuaikan dari mana token itu diluncurkan:
+    - **PONS ↗** (kuning): server memanggil `graduationStatus(token)` di kontrak factory/locker Pons. Kalau hasilnya valid, token itu diluncurkan lewat Pons.
+    - **FLAP ↗** (ungu): menurut dokumentasi Flap, token Flap di Robinhood Chain memakai alamat vanity yang berakhiran `8888` (standar) atau `7777` (tax token).
+    - **DEX ↗** (biru): selain dua di atas, membuka halaman token di DexPaprika.
+    - Hasil deteksi disimpan di cache. Hasil "DEX" dicek ulang setiap 30 menit.
+- Template link (`{ca}` diganti alamat token):
+  - `PONS_TOKEN_URL` = `https://ponsfamily.com/launchpad/{ca}`
+  - `FLAP_TOKEN_URL` = `https://flap.sh/robinhood/{ca}` (**belum dipastikan**: cek satu token di Flap, lalu sesuaikan di Railway)
+  - `DEX_TOKEN_URL` = `https://dexpaprika.com/robinhood/token/{ca}`
+  - `PONS_CONTRACTS` = daftar kontrak Pons yang dicek (default: factory dan locker aktif serta lama, dari dokumentasi Mobula)
 - API: `GET /api/new` → daftar token terbaru · `GET /api/lookup/<CA>` → semua pool token itu.
 - Kuota: ada 1 request tambahan per refresh untuk pool terbaru (sekitar 43 ribu per bulan dengan `REFRESH_SECONDS=60`), ditambah lookup CA dari pengguna.
 
 | Variabel | Default | |
 |---|---|---|
-| `PONS_TOKEN_URL` | `https://ponsfamily.com/token/{ca}` | format link tombol PONS |
+| `PONS_TOKEN_URL` | `https://ponsfamily.com/launchpad/{ca}` | link tombol PONS |
+| `FLAP_TOKEN_URL` | `https://flap.sh/robinhood/{ca}` | link tombol FLAP (cek formatnya) |
+| `DEX_TOKEN_URL` | `https://dexpaprika.com/robinhood/token/{ca}` | link tombol DEX |
 | `NEW_TOKENS_LIMIT` | 60 | jumlah token baru yang ditampilkan |
 
 ## Tampilan
