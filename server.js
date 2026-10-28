@@ -33,10 +33,10 @@ const CFG = {
   site: {
     name: process.env.SITE_NAME || "FISHY",
     url: (process.env.SITE_URL || "").replace(/\/$/, ""),
-    xUrl: process.env.X_URL || "",
-    xHandle: process.env.X_HANDLE || "",
+    xUrl: process.env.X_URL || "https://x.com/fishy_rh",
+    xHandle: process.env.X_HANDLE || "@fishy_rh",
     ca: process.env.TOKEN_CA || "",
-    symbol: process.env.TOKEN_SYMBOL || "$FISHY",
+    symbol: process.env.TOKEN_SYMBOL || "",
     explorer: (process.env.EXPLORER_URL || "").replace(/\/$/, ""),
     buyUrl: process.env.BUY_URL || "",
     // {ca} is replaced by the token address; check the format on Pons and change it in Railway if needed

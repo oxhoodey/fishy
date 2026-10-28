@@ -83,7 +83,7 @@ function frame(t){const now=t*1000;c.setTransform(1,0,0,1,0,0);c.clearRect(0,0,W
    const k=E.back(seg(u,0,.6));drawLogoAt(W/2,Math.round(-70+k*(8+70)),3);
    if(u>.5){const s="IS THIS TOKEN FISHY?",w=tw(s,1)+20;prect(c,W/2-w/2-3,85,w+6,17,"#BDF4FF");prect(c,W/2-w/2-1,87,w+2,13,"#0A1640");prect(c,W/2-w/2,88,w,11,"#14286E");txt(s,W/2,90,1,"#FFF6DC",null,"c")}
    if(COIN&&u>.8){const a=(u-.8)*4,sx=Math.abs(Math.cos(a)),cw=Math.max(2,Math.round(44*sx));c.drawImage(COIN,0,0,64,64,Math.round(W/2-cw/2),106,cw,44);if(sx<.3)prect(c,W/2-1,106,2,44,"#C26A22")}
-   if(u>1.2)txt("$FISHY · BUILT ON ROBINHOOD CHAIN",W/2,156,1,"#FFF6DC","#241527","c");
+   if(u>1.2)txt("BUILT ON ROBINHOOD CHAIN",W/2,156,1,"#FFF6DC","#241527","c");
    if(u>1.5&&Math.floor(u*2.5)%2===0)txt("INSERT COIN · COMING SOON",W/2,168,1,"#FFD23F","#241527","c")}
 }
 return{cv,frame,setCoin(u){return new Promise(r=>{const im=new Image();im.onload=()=>{COIN=im;r()};im.src=u})}};

@@ -54,7 +54,7 @@ File `.env` sudah masuk `.gitignore`, jadi API key tidak ikut ter-upload.
 | `X_URL` | `https://x.com/handle_kamu` | Tombol X di navbar |
 | `X_HANDLE` | `handle_kamu` | Ditampilkan sebagai @handle |
 | `TOKEN_CA` | `0x…` | Alamat kontrak token. Kalau kosong, tampil "COMING SOON". |
-| `TOKEN_SYMBOL` | `$FISHY` | |
+| `TOKEN_SYMBOL` | – | optional, leave empty until launch |
 | `EXPLORER_URL` | URL explorer Robinhood Chain | Kalau diisi, CA bisa diklik ke `EXPLORER_URL/address/<CA>` |
 | `DEXPAPRIKA_BASE` | `https://api.dexpaprika.com` | Biarkan default |
 | `DEXPAPRIKA_API_KEY` | – | Hanya kalau memakai paket berbayar DexPaprika |
