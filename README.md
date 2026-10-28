@@ -88,7 +88,8 @@ Seluruh UI bergaya game pixel RPG: panel kayu dengan isi perkamen, judul berupa 
 
 **CHECK · Robin memancing di danau pegunungan.** Tokohnya Robin Hood dari legenda rakyat (berjanggut, topi hijau berbulu merah), bukan logo Robinhood. Latarnya gunung bersalju, bukit, pohon, dan air danau.
 - **Kedalaman dasar laut** = berapa yang bisa dijual sebelum harga turun 5%. Tiang dermaga di kanan menjadi penggaris ($10 sampai $10M). **Gosong pasir** berarti tidak ada jalan keluar.
-- **Siluet ikan berkilau** dan **ikan salmon/trout yang melompat** = transaksi asli. Semakin banyak volume asli, semakin banyak ikan yang melompat. **Bebek karet** = volume palsu.
+- **Ikan** = volume asli. Semakin banyak ikan, semakin besar volume aslinya. Setiap ikan mewakili satu pool: **ikan besar** berarti pool yang membawa ≥25% volume asli token itu, **ikan kecil** berarti pool yang lebih kecil. Ikan yang melompat juga menandakan volume asli.
+- **Label di adegan** (tombol **LABELS ON/OFF** di kotak "How to read") menunjuk langsung ke air, dasar danau, ikan besar dan kecil, bebek, kail, dan penggaris, lengkap dengan angkanya. Pilihan on/off diingat di browser. **Bebek karet** = volume palsu.
 - **Kail** turun sampai kedalaman ukuran jualmu (slider "probe"). Gelembung "!" muncul saat ikan tertangkap. Saat kail ditarik, permukaan laut turun sesuai dampak harga. Kalau kail mentok di dasar, ukuran jualmu **terlalu besar**.
 - **Robin bergerak mengikuti siklus memancing:** joran diayun lalu dicambukkan saat melempar, melengkung dan Robin kaget saat ikan menggigit, Robin bersandar dengan gulungan berputar saat menarik, lalu mengangkat ikan tangkapan dengan kilauan. Kalau ukuran jualnya terlalu besar, joran melengkung keras dan Robin gemetar berkeringat.
 - Garis arus samar di dalam laut memisahkan pool-pool token itu.

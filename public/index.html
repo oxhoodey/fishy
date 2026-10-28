@@ -345,6 +345,11 @@ header.top b{color:var(--cream)}
 .cell{border-left:3px dashed #D8B884}
 .legend{border:3px solid var(--wood2);background:var(--cream);border-radius:4px;box-shadow:3px 3px 0 var(--wood3)}
 .legend.pxl{border:3px solid var(--wood2);box-shadow:3px 3px 0 var(--wood3);background:var(--cream);font-family:"Pixelify Sans",monospace;font-size:12px;line-height:1.5}
+.legend.howto{pointer-events:auto;max-width:270px;font-size:11px;line-height:1.3;gap:3px;padding:7px 9px}.legend.howto div{align-items:flex-start}.legend.howto b{font-weight:700}
+.legend.howto .ht{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:2px}.legend.howto .ht b{font:8px "Press Start 2P",monospace;color:#3B2416}
+.legend.howto button{font:7px "Press Start 2P",monospace;background:#3E8E5E;color:#FFF6DC;border:2px solid #2A5E3E;border-radius:3px;padding:4px 6px;cursor:pointer}.legend.howto button[aria-pressed="false"]{background:#C9894E;border-color:#8B5A2B}
+.legend.howto.min div:not(.ht){display:none}
+@media (max-width:600px){.legend.howto{max-width:260px;font-size:11px}}
 .tag{background:var(--cream);border:3px solid var(--wood2);border-radius:4px;font-family:"Pixelify Sans",monospace;font-size:12px}
 .vd{border:2px solid var(--wood3);border-radius:3px;font-family:"Pixelify Sans",monospace;font-size:11px;padding:2px 7px}
 .vd.ok{background:#CDEFD3}
@@ -421,7 +426,13 @@ footer .note{max-width:70%}
   <div class="stagewrap"><div class="stage" id="stage">
     <canvas id="tree" class="pix" aria-label="Robin fishing: pond depth is how much can be sold, rubber ducks are fake volume"></canvas>
     <canvas id="fx"></canvas>
-    <div class="legend pxl" style="top:auto;bottom:22%;left:1.4%;right:auto"><div>🌊 LAKE DEPTH = SELLABLE</div><div>✨ FISH = REAL TRADES</div><div>🦆 RUBBER DUCK = FAKE VOLUME</div><div>🎣 HOOK DEPTH = YOUR SELL</div><div>🏖️ SANDBAR = NO WAY OUT</div></div>
+    <div class="legend pxl howto" style="top:auto;bottom:22%;left:1.4%;right:auto"><div class="ht"><b>HOW TO READ</b><button type="button" id="lblbtn" aria-pressed="true">LABELS ON</button></div>
+<div>🌊 <span><b>Water</b> = liquidity (money in pools)</span></div>
+<div>⬇️ <span><b>Lakebed</b> = sellable before −5%</span></div>
+<div>🐟 <span><b>Fish</b> = real volume · big fish = big pool</span></div>
+<div>🦆 <span><b>Ducks</b> = fake volume</span></div>
+<div>🎣 <span><b>Hook</b> = your sell size</span></div>
+<div>🏖️ <span><b>Sandbar</b> = no way out</span></div></div>
     <div class="guide"><b>HOW TO READ</b>deep water = easy to sell · thick foam on shallow water = fake hype, a trap · drag the probe size to see how far the waterline drops · tanks below = other tokens, same scale</div>
     <div id="tags"></div>
   </div></div>
@@ -789,15 +800,19 @@ function rod(c,x0,y0,x1,y1){for(let k=0;k<=40;k++){const t2=k/40,xx=x0+(x1-x0)*t
 /* ================= CHECK · Robin fishing at sea =================
    Sea-floor depth (log $10 → $10M) = sellable before −5%. Fish = real trades. Rubber ducks = fake volume.
    The hook sinks to your sell size on the same scale; reeling in lowers the waterline by the price impact. */
-const PG={t:0,drop:0,typed:0,msg:"",fishes:[],ducks:[],tk:null};
+const PG={t:0,drop:0,typed:0,msg:"",fishes:[],ducks:[],tk:null,spot:{}};
+const LBL={on:(()=>{try{return localStorage.getItem("fishyLabels")!=="0"}catch(_){return true}})()};
 function pondGeo(LW,LH){const SURF=Math.round(LH*.42),BOT=LH-50;return{SURF,BOT,X0:0,X1:LW,dyPx:v=>{const k=(Math.min(AX_MAX,Math.max(AX_MIN,Math.log10(Math.max(1,v))))-AX_MIN)/(AX_MAX-AX_MIN);return Math.round(k*(BOT-SURF-6))}}}
 function drawStatic(){if(!T)return;const nDH=Math.round(DW*$("tree").clientHeight/Math.max(1,$("tree").clientWidth));if(nDH&&nDH!==DH){DH=nDH;buildTree(T.t);return}layoutTags()}
 function layoutTags(){const tg=$("tags");if(tg)tg.innerHTML=""}
 function spawnPacket(){}
 function pondFor(t){
   if(PG.tk===t)return;PG.tk=t;const r=seeded("pond"+t.id);PG.t=0;PG.drop=0;PG.typed=0;
-  const nf=t.legs.length?Math.min(20,2+Math.round(Math.log10(1+t.real)*1.6)):0,nd=t.vol>0?Math.min(16,Math.round((1-t.h)*16)):0;
-  PG.fishes=Array.from({length:nf},()=>{const big=r()<.45;return{u:r(),v:.12+r()*.8,sp:(.012+r()*.025)*(r()<.5?-1:1),big,kind:big?["bass","trout","koi"][Math.floor(r()*3)]:"minnow",tw:r()*6}});
+  const nf=t.legs.length&&t.real>0?Math.min(20,2+Math.round(Math.log10(1+t.real)*1.6)):0,nd=t.vol>0?Math.min(16,Math.round((1-t.h)*16)):0;
+  // each fish belongs to a pool: more fish = more real volume; big fish = a pool carrying ≥25% of the real volume, small fish = a smaller pool
+  const reals=t.legs.map(p=>Math.min(p.vol,p.liq*10)),tot=reals.reduce((a,b)=>a+b,0)||1,BIG=["bass","trout","koi","salmon"];PG.fishes=[];
+  reals.map((v,i)=>({v,i})).sort((a,b)=>b.v-a.v).forEach(({v,i},rank)=>{const share=v/tot;let n=Math.round(nf*share);if(v>0&&n<1&&PG.fishes.length<nf)n=1;
+    for(let k=0;k<n&&PG.fishes.length<nf;k++){const big=share>=.25;PG.fishes.push({u:r(),v:.12+r()*.8,sp:(.012+r()*.025)*(r()<.5?-1:1),big,kind:big?BIG[rank%4]:"minnow",tw:r()*6,pool:i,share})}});
   PG.ducks=Array.from({length:nd},()=>({u:r(),ph:r()*6}));
   PG.jump=Array.from({length:t.legs.length?Math.min(5,1+Math.round(Math.log10(1+t.real)*.6)):0},(_,i)=>({u:r(),dir:r()<.5?-1:1,off:r()*9,per:3+r()*4,dur:1+r()*.4,h:10+r()*14,trout:i%2===1}));
   const im=impact(t,S.size),fake=Math.round((1-t.h)*100);
@@ -812,9 +827,9 @@ function drawFx(dt,now){
   // pool layer boundaries (faint currents)
   if(depth){let acc=0;const tot=t.R||1;t.legs.slice(0,5).forEach((p,i)=>{acc+=Math.round(depth*(p.liq/2)/tot);const y=floorY-acc;if(i<t.legs.length-1&&y>lvl+3)for(let x=4;x<LW-50;x+=4)prect(c,x+((now/200)%4),y,2,1,"rgba(255,255,255,.18)")})}
   // fish silhouettes + sparkles = real trades
-  if(depth>6)PG.fishes.forEach(f=>{f.u=(f.u+f.sp*dt+1)%1;const fx=4+f.u*(LW-70),fy=lvl+4+f.v*Math.max(1,floorY-lvl-12);spr(c,f.kind,fx,fy+Math.round(Math.sin(now/500+f.tw)),f.sp>0);if(Math.sin(now/300+f.tw)>.7)spr(c,"sparkle",fx+(f.big?18:10),fy-3)});
+  PG.spot={};if(depth>6)PG.fishes.forEach(f=>{f.u=(f.u+f.sp*dt+1)%1;const fx=4+f.u*(LW-70),fy=lvl+4+f.v*Math.max(1,floorY-lvl-12);if(f.big&&!PG.spot.big&&fx>LW*.18&&fx<LW*.45)PG.spot.big=[fx+12,fy+7,f];if(!f.big&&!PG.spot.small&&fx>LW*.55&&fx<LW*.78)PG.spot.small=[fx+6,fy+4,f];spr(c,f.kind,fx,fy+Math.round(Math.sin(now/500+f.tw)),f.sp>0);if(Math.sin(now/300+f.tw)>.7)spr(c,"sparkle",fx+(f.big?18:10),fy-3)});
   // rubber ducks = fake volume
-  PG.ducks.forEach((d,i)=>{const dx=120+d.u*(LW-190)+Math.sin(now/1500+d.ph)*6,dy=lvl-4+Math.round(Math.sin(now/280+d.ph));spr(c,"duck",dx,dy,i%2===1)});
+  PG.ducks.forEach((d,i)=>{const dx=120+d.u*(LW-190)+Math.sin(now/1500+d.ph)*6,dy=lvl-4+Math.round(Math.sin(now/280+d.ph));spr(c,"duck",dx,dy,i%2===1);if(!PG.spot.duck||dx>PG.spot.duck[0])PG.spot.duck=[dx+5,dy]});
   // Robin in his boat
   if(depth)jumpers(c,PG.jump,lvl,now,60,LW-70);
   PG.t+=dt;const hookTarget=Math.min(floorY-1,lvl+Math.max(3,g.dyPx(S.size))),tooBig=!t.R||S.size>t.e5;
@@ -855,10 +870,20 @@ function drawFx(dt,now){
   for(let e=AX_MIN;e<=AX_MAX;e++){const yy=lvl+g.dyPx(Math.pow(10,e));if(!depth||yy>floorY)continue;pxText(x,money(Math.pow(10,e)).replace(".00",""),(LW-50)*K,yy*K+4,fs*.5,"#FFF6DC","right","rgba(11,42,98,.75)")}
   if(depth)pxText(x,"▸ "+money(t.e5)+" sellable",(LW-50)*K,(floorY-3)*K,fs*.55,"#3B2416","right","#FFD23F");
   else pxText(x,"SANDBAR · NO WAY OUT",(LW/2)*K,(g.SURF+16)*K,fs*.65,"#FFFFFF","center","#D7263D");
-  if(PG.ducks.length)pxText(x,`🦆 ${Math.round((1-t.h)*100)}% FAKE`,(LW-56)*K,(lvl-10)*K,fs*.55,"#3B2416","right","#FFD23F");
+  if(PG.ducks.length&&!LBL.on)pxText(x,`🦆 ${Math.round((1-t.h)*100)}% FAKE`,(LW-56)*K,(lvl-10)*K,fs*.55,"#3B2416","right","#FFD23F");
   if(ph==="bite"&&!tooBig){const X=(fx2+10)*K,Y=(lvl-26)*K,r0=fs*1.6;x.fillStyle="#FFFFFF";x.beginPath();for(let k=0;k<16;k++){const a=k/16*Math.PI*2,rr2=k%2?r0:r0*.7;x.lineTo(X+Math.cos(a)*rr2,Y+Math.sin(a)*rr2)}x.closePath();x.fill();x.strokeStyle="#3B2416";x.lineWidth=2;x.stroke();x.font=`${fs*1.2}px sans-serif`;x.textAlign="center";x.fillText("🐟",X,Y+fs*.4)}
-  if(ph!=="cast"&&ph!=="rest"){const lab=tooBig?`${money(S.size)} · TOO BIG`:`${money(S.size)} → −${(im*100).toFixed(im<.01?2:1)}%`;pxText(x,lab,(fx2+6)*K,(hy+5)*K,fs*.52,tooBig?"#FFFFFF":"#3B2416","left",tooBig?"#D7263D":"#FFF6DC")}
-  pxText(x,"OTHER PONDS · SAME SCALE · CLICK ONE",8*K,(LH-46)*K+2,fs*.5,"#3B2416");
+  if(ph!=="cast"&&ph!=="rest"){const lab=tooBig?`HOOK · YOUR ${money(S.size)} · TOO BIG`:`HOOK · YOUR ${money(S.size)} SELL → −${(im*100).toFixed(im<.01?2:1)}%`;pxText(x,lab,(fx2+6)*K,(hy+5)*K,fs*.52,tooBig?"#FFFFFF":"#3B2416","left",tooBig?"#D7263D":"#FFF6DC")}
+  pxText(x,"OTHER TOKENS · SAME SCALE · CLICK ONE",8*K,(LH-46)*K+2,fs*.5,"#3B2416");
+  if(LBL.on){const tagAt=(lx,ly,ax,ay,s,bg,col)=>{x.font=`${fs*.5}px ${PX_FONT}`;const tw2=x.measureText(s).width+12,h2=fs*.5+10,X=Math.max(4,Math.min(w-tw2-4,lx*K)),Y=Math.max(4,Math.min(h-h2-4,ly*K));
+      if(ax!=null){x.strokeStyle="#241527";x.lineWidth=2;x.beginPath();x.moveTo(X+tw2/2,Y+h2/2);x.lineTo(ax*K,ay*K);x.stroke();x.fillStyle="#241527";x.fillRect(ax*K-3,ay*K-3,6,6)}
+      x.fillStyle="#241527";x.fillRect(X-2,Y-2,tw2+4,h2+4);x.fillStyle=bg||"#FFF6DC";x.fillRect(X,Y,tw2,h2);pxText(x,s,X+6,Y+h2-5,fs*.5,col||"#3B2416")};
+    const sp=PG.spot||{};
+    if(depth){tagAt(LW*.04,lvl+12,null,null,`WATER = LIQUIDITY · ${money((t.R||0)*2)}`,"#BDF4FF","#0A1640");
+      tagAt(LW*.42,floorY+5,LW*.5,floorY,`LAKEBED = HOW MUCH YOU CAN SELL BEFORE −5% · ${money(t.e5)}`,"#FFD23F")}
+    if(sp.duck)tagAt(sp.duck[0]-30,sp.duck[1]-26,sp.duck[0],sp.duck[1],`DUCKS = FAKE VOLUME · ${Math.round((1-t.h)*100)}%`,"#FFE9A8");
+    if(sp.big)tagAt(sp.big[0]-44,sp.big[1]-18,sp.big[0],sp.big[1],`BIG FISH = BIG POOL · ${Math.round(sp.big[2].share*100)}% OF REAL VOL`,"#CDEFD3");
+    if(sp.small)tagAt(sp.small[0]-10,sp.small[1]+12,sp.small[0],sp.small[1],"SMALL FISH = SMALL POOL","#CDEFD3");
+    if(depth)tagAt(LW-128,lvl+6,LW-50,lvl+10,"RULER = DEPTH IN $","#FFF6DC")}
   T.others.forEach((o,i)=>{const P=tankPos(i),ks=LW/DW;pxText(x,`${o.sym} ${o.grade}`,(P.x*ks+P.w*ks/2)*K,(LH-6)*K+3,fs*.5,"#3B2416","center")});
 }
 
@@ -1454,6 +1479,8 @@ function applySite(){const xb=$("xbtn"),xh=$("xh");if(SITE.xUrl){xb.href=SITE.xU
   bt.onclick=async()=>{let ok=false;try{await navigator.clipboard.writeText(SITE.ca);ok=true}catch(_){try{const r=document.createRange();r.selectNodeContents(ca);const sel=getSelection();sel.removeAllRanges();sel.addRange(r);ok=document.execCommand("copy");sel.removeAllRanges()}catch(__){}}
     if(ok){bx.classList.add("copied");bt.textContent="COPIED!";setTimeout(()=>{bx.classList.remove("copied");bt.textContent="COPY"},1600)}}}
 let booted=false;
+(function(){const b=$("lblbtn");if(!b)return;const sync=()=>{b.textContent=LBL.on?"LABELS ON":"LABELS OFF";b.setAttribute("aria-pressed",LBL.on);b.closest(".howto").classList.toggle("min",false)};sync();
+  b.addEventListener("click",()=>{LBL.on=!LBL.on;try{localStorage.setItem("fishyLabels",LBL.on?"1":"0")}catch(_){}sync()})})();
 async function boot(){
   if(!window.FISHY_CONFIG){try{const r=await fetch("api/config",{cache:"no-store"});if(r.ok)Object.assign(SITE,await r.json())}catch(_){}}applySite();
   let live=false;try{const r=await fetch("api/pools",{cache:"no-store"});if(!r.ok)throw 0;const j=await r.json();if(!j.pools||!j.pools.length)throw 0;S.updatedAt=j.updatedAt;ingest(j.pools);live=true}catch(_){
