@@ -22,6 +22,7 @@ const CFG = {
   quakeMinDrop: +process.env.QUAKE_MIN_DROP || 0.3,
   swapPools: +process.env.SWAP_TEST_POOLS || 4,
   tokenLookups: +process.env.TOKEN_LOOKUPS_PER_REFRESH || 25,
+  newTokens: Math.min(100, +process.env.NEW_TOKENS_LIMIT || 60),
   apiBase: process.env.DEXPAPRIKA_BASE || "https://api.dexpaprika.com",
   apiKey: process.env.DEXPAPRIKA_API_KEY || "",
   apiKeyHeader: process.env.DEXPAPRIKA_API_KEY_HEADER || "authorization",
@@ -37,6 +38,8 @@ const CFG = {
     symbol: process.env.TOKEN_SYMBOL || "$FISHY",
     explorer: (process.env.EXPLORER_URL || "").replace(/\/$/, ""),
     buyUrl: process.env.BUY_URL || "",
+    // {ca} is replaced by the token address; check the format on Pons and change it in Railway if needed
+    ponsUrl: process.env.PONS_TOKEN_URL || "https://ponsfamily.com/token/{ca}",
   },
 };
 
@@ -58,7 +61,7 @@ function normalize(p) {
     const id = String(x.id || x.address || x.token_address || "?"), meta = TOKEN_META.get(id.toLowerCase()) || {};
     const short = id.length > 12 ? id.slice(0, 6) + "…" + id.slice(-4) : id;
     const sym = String(x.symbol || meta.symbol || x.name || meta.name || short).slice(0, 16);
-    return { id, sym, name: String(x.name || meta.name || sym).slice(0, 48), cat: category(sym) };
+    return { id, sym, name: String(x.name || meta.name || sym).slice(0, 48), cat: category(sym), fdv: num(x.fdv) };
   };
   return {
     id: String(p.id),
@@ -135,6 +138,43 @@ async function enrichTokens(raw) {
     }));
   }
   if (todo.length) console.log(`token lookups: ${todo.length} · known symbols: ${TOKEN_META.size}`);
+}
+async function dpGet(pathAndQuery) {
+  const res = await fetch(`${CFG.apiBase}${pathAndQuery}`, { headers: headers(), signal: AbortSignal.timeout(20000) });
+  if (!res.ok) throw new Error(`DexPaprika ${res.status}`);
+  return res.json();
+}
+// newest pools on the chain (first page, no key needed)
+async function fetchNewPools() {
+  const j = await dpGet(`/networks/${encodeURIComponent(CFG.chain)}/pools/search?order_by=created_at&sort=desc&limit=100&detailed=true`);
+  return j.results || [];
+}
+// every pool of one token, for "paste a CA" in CHECK
+const LOOKUP_CACHE = new Map();
+async function lookupToken(addr) {
+  const hit = LOOKUP_CACHE.get(addr);
+  if (hit && Date.now() - hit.t < 60000) return hit.d;
+  const j = await dpGet(`/networks/${encodeURIComponent(CFG.chain)}/pools/search?token_address=${encodeURIComponent(addr)}&order_by=liquidity_usd&sort=desc&limit=25&detailed=true`);
+  const raw = j.results || [];
+  await enrichTokens(raw);
+  const pools = raw.map(normalize).filter(Boolean);
+  const d = { address: addr, pools, updatedAt: new Date().toISOString() };
+  LOOKUP_CACHE.set(addr, { t: Date.now(), d });
+  if (LOOKUP_CACHE.size > 300) LOOKUP_CACHE.delete(LOOKUP_CACHE.keys().next().value);
+  return d;
+}
+function newTokenList(pools) {
+  const seen = new Set(), out = [];
+  const sorted = pools.slice().sort((a, b) => Date.parse(b.created || 0) - Date.parse(a.created || 0));
+  for (const p of sorted) {
+    const A = p.a.sym.toUpperCase(), B = p.b.sym.toUpperCase();
+    const t = HUBS.has(A) && !HUBS.has(B) ? p.b : p.a, other = t === p.a ? p.b : p.a;
+    if (HUBS.has(t.sym.toUpperCase()) || seen.has(t.id.toLowerCase())) continue;
+    seen.add(t.id.toLowerCase());
+    out.push({ id: t.id, sym: t.sym, name: t.name, mc: t.fdv, created: p.created, pool: p.id, dex: p.dex, pair: other.sym, liq: p.liq, vol: p.vol });
+    if (out.length >= CFG.newTokens) break;
+  }
+  return out;
 }
 async function fetchPools() {
   const all = [];
@@ -235,8 +275,13 @@ async function poolOHLCV(id) {
 async function refresh() {
   try {
     const raw = await fetchPools();
-    await enrichTokens(raw);
-    const pools = raw.map(normalize).filter(Boolean)
+    let rawNew = [];
+    try { rawNew = await fetchNewPools(); } catch (e) { console.warn("new pools:", e.message); }
+    await enrichTokens(raw.concat(rawNew));
+    const newPools = rawNew.map(normalize).filter(Boolean)
+      .filter((p) => !CFG.excludeStocks || (p.a.cat !== "stock" && p.b.cat !== "stock"));
+    const ids = new Set(raw.map((p) => String(p.id)));
+    const pools = raw.concat(rawNew.filter((p) => !ids.has(String(p.id)))).map(normalize).filter(Boolean)
       .filter((p) => !CFG.excludeStocks || (p.a.cat !== "stock" && p.b.cat !== "stock"));
     if (!pools.length) throw new Error("DexPaprika returned no pools");
     const exits = tokenExits(pools);
@@ -245,7 +290,7 @@ async function refresh() {
     const activity = detectQuakes(pools, Date.parse(t));
     history.push({ t, index, activity });
     while (history.length > CFG.historyMax) history.shift();
-    snapshot = { chain: CFG.chain, updatedAt: t, error: null, pools, index, history: history.slice(-288) };
+    snapshot = { chain: CFG.chain, updatedAt: t, error: null, pools, index, history: history.slice(-288), newTokens: newTokenList(newPools) };
     broadcast("pools", snapshot);
     console.log(`[${t}] ${pools.length} pools · index`, index);
   } catch (e) {
@@ -320,6 +365,13 @@ const server = http.createServer((req, res) => {
   }
   if (u.pathname === "/api/health") return send(res, 200, { ok: !snapshot.error, updatedAt: snapshot.updatedAt, pools: snapshot.pools.length, error: snapshot.error, clients: clients.size });
   if (u.pathname === "/api/config") return send(res, 200, publicConfig());
+  if (u.pathname === "/api/new") return send(res, 200, { updatedAt: snapshot.updatedAt, tokens: snapshot.newTokens || [] });
+  if (u.pathname.startsWith("/api/lookup/")) {
+    const addr = decodeURIComponent(u.pathname.slice(12)).trim().toLowerCase();
+    if (!/^0x[0-9a-f]{40}$/.test(addr)) return send(res, 400, { error: "send a 0x… contract address (40 hex characters)" });
+    lookupToken(addr).then((d) => send(res, 200, d)).catch((e) => send(res, 502, { error: String(e.message || e) }));
+    return;
+  }
   if (u.pathname === "/" || u.pathname === "/index.html") {
     try { return send(res, 200, renderIndex(req), "text/html; charset=utf-8"); } catch (e) { return send(res, 500, { error: "index missing" }); }
   }

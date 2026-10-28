@@ -346,6 +346,19 @@ header.top b{color:var(--cream)}
 .legend{border:3px solid var(--wood2);background:var(--cream);border-radius:4px;box-shadow:3px 3px 0 var(--wood3)}
 .legend.pxl{border:3px solid var(--wood2);box-shadow:3px 3px 0 var(--wood3);background:var(--cream);font-family:"Pixelify Sans",monospace;font-size:12px;line-height:1.5}
 .legend.howto{pointer-events:auto;max-width:270px;font-size:11px;line-height:1.3;gap:3px;padding:7px 9px}.legend.howto div{align-items:flex-start}.legend.howto b{font-weight:700}
+.newtok{margin-top:14px}.ntwrap{overflow-x:auto}.nt{width:100%;border-collapse:separate;border-spacing:0 6px;font-size:13px}
+.nt th{font:8px "Press Start 2P",monospace;color:#8B5A2B;text-align:left;padding:2px 8px;font-weight:400}
+.nt td{background:#FFF6DC;padding:7px 8px;border-top:2px solid #E8D4AE;border-bottom:2px solid #E8D4AE;vertical-align:middle;white-space:nowrap}
+.nt td:first-child{border-left:2px solid #E8D4AE;border-radius:6px 0 0 6px}.nt td:last-child{border-right:2px solid #E8D4AE;border-radius:0 6px 6px 0;text-align:right}
+.nt .sy{font-weight:700;color:#3B2416}.nt .nm{display:block;font-size:11px;color:#8B5A2B;max-width:170px;overflow:hidden;text-overflow:ellipsis}
+.nt .fresh{display:inline-block;font:7px "Press Start 2P",monospace;background:#5FCB6A;color:#FFFFFF;border-radius:3px;padding:3px 4px;margin-left:6px;vertical-align:middle}
+.nt .ca{font:600 12px ui-monospace,monospace;color:#3B2416;margin-right:6px}
+.nt button,.nt a.pons{font:8px "Press Start 2P",monospace;border:2px solid #3B2416;border-radius:4px;padding:6px 7px;cursor:pointer;text-decoration:none;display:inline-block;margin-left:4px}
+.nt .cp{background:#BDF4FF;color:#0A1640}.nt .cp.ok{background:#5FCB6A;color:#FFFFFF}.nt .ck{background:#3E8E5E;color:#FFF6DC}.nt a.pons{background:#FFD23F;color:#3B2416}
+.nt tr.sel td{background:#FFE9A8}.nt .empty td{text-align:center!important;color:#8B5A2B}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);opacity:0;transition:.25s;background:#241527;color:#FFF6DC;font:9px "Press Start 2P",monospace;padding:10px 14px;border-radius:6px;z-index:60;pointer-events:none}
+#toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+@media (max-width:600px){.nt .nm{max-width:110px}.nt td{padding:6px 5px}}
 .legend.howto .ht{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:2px}.legend.howto .ht b{font:8px "Press Start 2P",monospace;color:#3B2416}
 .legend.howto button{font:7px "Press Start 2P",monospace;background:#3E8E5E;color:#FFF6DC;border:2px solid #2A5E3E;border-radius:3px;padding:4px 6px;cursor:pointer}.legend.howto button[aria-pressed="false"]{background:#C9894E;border-color:#8B5A2B}
 .legend.howto.min div:not(.ht){display:none}
@@ -415,7 +428,7 @@ footer .note{max-width:70%}
   <div class="sub">
     <span class="cap" id="topo">token · — · pools 0 · dust 0 · pairs 0</span>
     <span class="ctl">
-      <input id="q" placeholder="symbol or 0x… address" aria-label="Token" list="tl" autocomplete="off"><datalist id="tl"></datalist>
+      <input id="q" placeholder="symbol or paste a 0x… CA" aria-label="Token" list="tl" autocomplete="off"><datalist id="tl"></datalist>
       <label class="cap" for="size" style="display:flex;gap:6px;align-items:center">probe <input type="range" id="size" min="2" max="6" step="0.05" value="3" style="width:110px;accent-color:#111"><b class="num" id="sizev" style="min-width:44px">$1.0K</b></label>
       <button id="go">SCAN</button><button id="auto" aria-pressed="true">AUTO ●</button>
     </span>
@@ -436,6 +449,9 @@ footer .note{max-width:70%}
     <div class="guide"><b>HOW TO READ</b>deep water = easy to sell · thick foam on shallow water = fake hype, a trap · drag the probe size to see how far the waterline drops · tanks below = other tokens, same scale</div>
     <div id="tags"></div>
   </div></div>
+
+  <section class="pn newtok" id="newtok"><h3>NEW TOKENS · ROBINHOOD CHAIN<span id="ntInfo">SCANNING…</span></h3>
+    <div class="ntwrap"><table class="nt"><thead><tr><th>TOKEN</th><th>AGE</th><th>MARKET CAP</th><th class="hide2">LIQUIDITY</th><th>CA</th><th></th></tr></thead><tbody id="ntBody"></tbody></table></div></section>
 
   <div class="streamhead"><span class="cap">event stream</span><span class="cap">window 12 s · now →</span></div>
   <div class="stream"><canvas id="evc"></canvas></div>
@@ -552,6 +568,7 @@ function seeded(seed){let s=2166136261;for(const c of String(seed))s=Math.imul(s
 
 const isStock=t=>STOCK.has(String(t.sym||"").toUpperCase());
 function ingest(pools){
+  S.extra=S.extra||new Map();if(S.extra.size){const ids=new Set(pools.map(p=>p&&p.id));pools=pools.concat([...S.extra.values()].filter(p=>!ids.has(p.id)))}
   // crypto-only: drop every pool that touches a tokenized stock
   S.pools=pools.filter(p=>p&&p.a&&p.b&&p.a.id!==p.b.id&&!isStock(p.a)&&!isStock(p.b));S.tokens=new Map();
   for(const p of S.pools){p.real=p.liq<MIN_LIQ?0:Math.min(p.vol,p.liq*TURN);p.h=p.vol>0?p.real/p.vol:1;
@@ -1450,7 +1467,14 @@ function chips(){const list=(VIEW==="larp"?tradable().sort((a,b)=>b.larp.score-a
   $("tl").innerHTML=list.map(t=>`<option value="${esc(t.sym)}">`).join("")}
 
 /* ================= events ================= */
-$("go").onclick=()=>{const t=find($("q").value);if(t)scan(t,true);else{code([`error: "${$("q").value}" not in tracked pools`])}};
+const isCA=v=>/^0x[0-9a-fA-F]{40}$/.test(String(v).trim());
+async function lookupCA(addr){addr=addr.trim().toLowerCase();code([`lookup ${addr.slice(0,6)}…${addr.slice(-4)} on DexPaprika`]);
+  try{const r=await fetch("api/lookup/"+addr,{cache:"no-store"});const j=await r.json();if(!r.ok)throw new Error(j.error||r.status);
+    if(!j.pools||!j.pools.length){code([`no pools found for ${addr.slice(0,10)}… on this chain`]);toastMsg("No pools found for that CA");return null}
+    j.pools.forEach(p=>S.extra.set(p.id,p));ingest(S.pools.concat(j.pools));chips();return S.tokens.get(j.pools[0].a.id.toLowerCase()===addr?j.pools[0].a.id:j.pools[0].b.id.toLowerCase()===addr?j.pools[0].b.id:addr)||find(addr)}
+  catch(e){code([`lookup failed: ${e.message||e}`]);toastMsg(S.mode==="live"?"Lookup failed, try again":"Paste-a-CA works on the live site");return null}}
+function toastMsg(m){let el=$("toast");if(!el){el=document.createElement("div");el.id="toast";document.body.appendChild(el)}el.textContent=m;el.className="on";clearTimeout(el.__t);el.__t=setTimeout(()=>el.className="",2400)}
+$("go").onclick=async()=>{const v=$("q").value.trim();let t=find(v);if(!t&&isCA(v))t=await lookupCA(v);if(t){scan(t,true);document.getElementById("stage").scrollIntoView({behavior:"smooth",block:"center"})}else code([`error: "${v}" not in tracked pools`])};
 $("q").addEventListener("keydown",e=>{if(e.key==="Enter")$("go").click()});
 let swDeb;$("size").oninput=e=>{S.size=Math.round(Math.pow(10,+e.target.value)/10)*10;PG.tk=null;$("sizev").textContent=money(S.size);S.lastTouch=performance.now();if(S.sel)trace(S.sel);if(VIEW==="swap"){clearTimeout(swDeb);swDeb=setTimeout(()=>swapRun(S.sel),400)}};
 $("auto").onclick=e=>{S.auto=!S.auto;e.currentTarget.classList.toggle("off",!S.auto);e.currentTarget.textContent=S.auto?"AUTO ●":"AUTO ○";e.currentTarget.setAttribute("aria-pressed",S.auto)};
@@ -1473,12 +1497,30 @@ function frame(now){
 /* ================= boot ================= */
 function setMode(live){S.mode=live?"live":"demo";$("mode").className="sim"+(live?" live":"");$("mode").lastChild.textContent=live?"LIVE":"DEMO";
   $("src").textContent=live?`LIVE · DEXPAPRIKA POOLS · REFRESH 60 S${S.updatedAt?" · LAST "+new Date(S.updatedAt).toLocaleTimeString("en-GB"):""} · ESTIMATES, NOT FINANCIAL ADVICE`:"DEMO DATA · POOL NAMES AND VOLUMES FROM A JULY 2026 DEXPAPRIKA SNAPSHOT, SOME POOLS AND LIQUIDITY ILLUSTRATIVE · CRYPTO ONLY · ESTIMATES, NOT FINANCIAL ADVICE"}
-const SITE=Object.assign({name:"FISHY",xUrl:"",xHandle:"",ca:"",symbol:"$FISHY",explorer:"",demoFallback:true},window.FISHY_CONFIG||{});
+const SITE=Object.assign({name:"FISHY",xUrl:"",xHandle:"",ca:"",symbol:"$FISHY",explorer:"",demoFallback:true,ponsUrl:"https://ponsfamily.com/token/{ca}"},window.FISHY_CONFIG||{});
 function applySite(){const xb=$("xbtn"),xh=$("xh");if(SITE.xUrl){xb.href=SITE.xUrl;xb.classList.remove("off");xh.textContent=SITE.xHandle?"@"+SITE.xHandle.replace(/^@/,""):"FOLLOW"}else{xb.removeAttribute("href");xb.classList.add("off");xh.textContent="X · SOON"}
   const ca=$("ca"),bx=$("cabox"),bt=$("cacopy");if(SITE.ca){ca.textContent=SITE.ca;ca.title=SITE.symbol+" contract: "+SITE.ca;if(SITE.explorer)ca.href=SITE.explorer+"/address/"+SITE.ca;else ca.removeAttribute("href");bt.hidden=false}else{ca.textContent=(SITE.symbol||"")+" · COMING SOON";ca.removeAttribute("href");bt.hidden=true}
   bt.onclick=async()=>{let ok=false;try{await navigator.clipboard.writeText(SITE.ca);ok=true}catch(_){try{const r=document.createRange();r.selectNodeContents(ca);const sel=getSelection();sel.removeAllRanges();sel.addRange(r);ok=document.execCommand("copy");sel.removeAllRanges()}catch(__){}}
     if(ok){bx.classList.add("copied");bt.textContent="COPIED!";setTimeout(()=>{bx.classList.remove("copied");bt.textContent="COPY"},1600)}}}
 let booted=false;
+const NT={list:[],at:null};
+const agoShort=ms=>{if(!(ms>=0))return"—";const m=ms/60000;return m<1?"now":m<60?Math.round(m)+"m":m<1440?Math.round(m/60)+"h":Math.round(m/1440)+"d"};
+function ponsLink(ca){return(SITE.ponsUrl||"https://ponsfamily.com/token/{ca}").replace("{ca}",ca)}
+function renderNew(){const b=$("ntBody");if(!b)return;const L=NT.list;
+  $("ntInfo").textContent=(S.mode==="live"?"LIVE":"DEMO")+" · "+L.length+" NEWEST";
+  if(!L.length){b.innerHTML=`<tr class="empty"><td colspan="6">No new pools yet. Refreshes every minute.</td></tr>`;return}
+  b.innerHTML=L.map(t=>{const age=Date.now()-Date.parse(t.created),short=t.id.length>14?t.id.slice(0,6)+"…"+t.id.slice(-4):t.id,sel=S.sel&&S.sel.id===t.id?" sel":"";
+    return `<tr class="${sel}"><td><span class="sy">${esc(t.sym)}</span>${age<36e5?'<span class="fresh">NEW</span>':""}<span class="nm">${esc(t.name||"")} · ${esc(t.pair||"")}</span></td>
+      <td class="num">${agoShort(age)}</td><td class="num">${t.mc?money(t.mc):"—"}</td><td class="num hide2">${money(t.liq||0)}</td>
+      <td><span class="ca" title="${esc(t.id)}">${esc(short)}</span><button class="cp" data-ca="${esc(t.id)}" type="button">COPY</button></td>
+      <td><button class="ck" data-check="${esc(t.id)}" type="button">CHECK</button><a class="pons" href="${esc(ponsLink(t.id))}" target="_blank" rel="noopener noreferrer">PONS</a></td></tr>`}).join("")}
+function demoNew(){const now=Date.now(),ts=tradable().filter(t=>!HUB.has(t.sym.toUpperCase())).slice(0,10);
+  return ts.map((t,i)=>({id:t.id.startsWith("0x")?t.id:"0x"+(t.sym+"000000000000000000000000000000000000000").replace(/[^0-9a-f]/gi,"a").slice(0,40).toLowerCase(),sym:t.sym,name:t.name,pair:"WETH",mc:t.R*2*(3+i),liq:t.R*2,created:new Date(now-(i*i*7+3)*60000).toISOString()}))}
+async function loadNew(){if(S.mode==="live"){try{const r=await fetch("api/new",{cache:"no-store"});if(r.ok){const j=await r.json();NT.list=j.tokens||[];NT.at=j.updatedAt}}catch(_){}}else NT.list=demoNew();renderNew()}
+document.addEventListener("click",async e=>{const cp=e.target.closest(".nt .cp");if(cp){const ca=cp.dataset.ca;let ok=false;try{await navigator.clipboard.writeText(ca);ok=true}catch(_){}
+    cp.textContent=ok?"COPIED":"COPY?";cp.classList.toggle("ok",ok);setTimeout(()=>{cp.textContent="COPY";cp.classList.remove("ok")},1500);if(!ok)toastMsg(ca);return}
+  const ck=e.target.closest(".nt .ck");if(ck){const ca=ck.dataset.check;let t=S.tokens.get(ca)||find(ca);if(!t&&isCA(ca))t=await lookupCA(ca);if(t){if(VIEW!=="check")setView("check");scan(t,true);renderNew();document.getElementById("stage").scrollIntoView({behavior:"smooth",block:"center"})}}});
+setInterval(()=>{if(VIEW==="check")loadNew()},60000);setInterval(renderNew,30000);
 (function(){const b=$("lblbtn");if(!b)return;const sync=()=>{b.textContent=LBL.on?"LABELS ON":"LABELS OFF";b.setAttribute("aria-pressed",LBL.on);b.closest(".howto").classList.toggle("min",false)};sync();
   b.addEventListener("click",()=>{LBL.on=!LBL.on;try{localStorage.setItem("fishyLabels",LBL.on?"1":"0")}catch(_){}sync()})})();
 async function boot(){
@@ -1488,12 +1530,12 @@ async function boot(){
     ingest(DEMO)}
   $("offline").classList.remove("on");if(booted&&live){chips();scan(S.sel||tradable().sort((a,b)=>b.vol-a.vol)[0]);return}booted=true;
   if(live){try{const r=await fetch("api/quakes");if(r.ok){const j=await r.json();SZ.quakes=j.quakes||[];SZ.activity=j.activity||[];SZ.since=j.since}}catch(_){}}else SZ.quakes=demoQuakes();
-  setMode(live);chips();const first=find("CASH")||tradable().sort((a,b)=>b.vol-a.vol)[0];scan(first);requestAnimationFrame(frame);
-  if(live){try{const es=new EventSource("api/stream");es.addEventListener("quake",e=>{try{addQuake(JSON.parse(e.data))}catch(_){}});es.addEventListener("pools",e=>{try{const j=JSON.parse(e.data);if(j.history&&j.history.length){const h=j.history[j.history.length-1];SZ.activity.push({t:h.t,a:h.activity||0});if(SZ.activity.length>240)SZ.activity.shift()}S.updatedAt=j.updatedAt;const keep=S.sel&&S.sel.id;ingest(j.pools);setMode(true);
+  setMode(live);chips();loadNew();const first=find("CASH")||tradable().sort((a,b)=>b.vol-a.vol)[0];scan(first);requestAnimationFrame(frame);
+  if(live){try{const es=new EventSource("api/stream");es.addEventListener("quake",e=>{try{addQuake(JSON.parse(e.data))}catch(_){}});es.addEventListener("pools",e=>{try{const j=JSON.parse(e.data);if(j.history&&j.history.length){const h=j.history[j.history.length-1];SZ.activity.push({t:h.t,a:h.activity||0});if(SZ.activity.length>240)SZ.activity.shift()}S.updatedAt=j.updatedAt;const keep=S.sel&&S.sel.id;ingest(j.pools);setMode(true);if(j.newTokens){NT.list=j.newTokens;renderNew()}
     for(let k=0;k<6;k++)ev("scan");S.scanned+=j.pools.length;const t=keep&&S.tokens.get(keep);if(t){S.sel=t;trace(t);squares(t);topo(t)}chips()}catch(_){}})}catch(_){}}
 }
 const ILL={sharkI:["......X.........",".....XkX........","....XkkkX.....XX","..XXkkkkkXXX.XkX",".XkkRkkkkkkkXkkX","XkkkkkkkkkkkkkX.","XWXWXwwwwwwkkkkX",".XwwwwwwwwwXXXkX","..XXXXXXXXX...XX"],mag:["....XXXXX.......","...XVVVVVX......","..XVWWVVVVX.....",".XVWVVVVVVVX....",".XVWVVVVVVVX....",".XVVVVVVVVVX....",".XVVVVVVVVVX....","..XVVVVVVVX.....","...XVVVVVXX.....","....XXXXXbbX....","..........XbbX..","...........XbbX.","............XbbX",".............XX."],heart:["..XXX....XXX...",".XRRRX..XRRRX..","XRWWRRXXRRRRRX.","XRWRRRRRRRRRRX.","XRRRRRRRRRRRRX.","XRRRRRRRRRRRRX.",".XRRRRRRRRRRX..","..XRRRRRRRRX...","...XRRRRRRX....","....XRRRRX.....",".....XRRX......","......XX......."],folder:["XXXXXX..........","XyyyyyXXXXXXXXX.","XyyyyyyyyyyyyyX.","XXXXXXXXXXXXXXXX","XYYYYYYYYYYYYYYX","XYYYYYYYYYYYYYYX","XYYYXXXXXXXYYYYX","XYYYXRRRRRXYYYYX","XYYYXXXXXXXYYYYX","XYYYYYYYYYYYYYYX","XyyyyyyyyyyyyyyX","XXXXXXXXXXXXXXXX"],book:[".XXXXXXXXXXXX..","XRRRRRRRRRRRRX.","XRrrrrrrrrrrRX.","XRrXYYYYYYXrRX.","XRrrrrrrrrrrRX.","XRRRRRRRRRRRRX.","XRRRRYYYYRRRRX.","XRRRRRRRRRRRRX.","XRRRRRRRRRRRRX.","XRRRRRRRRRRRRX.","XWWWWWWWWWWWWX.","XwwwwwwwwwwwwX.",".XXXXXXXXXXXX.."],mask:["..XXXXXXXXXXX..",".XWWWWWWWWWWWX.","XWWWWWWWWWWWWWX","XWXXXWWWWWXXXWX","XWXKXWWWWWXKXWX","XWWXWWWWWWWXWWX","XWWWWWWXWWWWWWX",".XWWWWXXXWWWWX.",".XWWRWWWWWRWWX.","..XWWRRRRRWWX..","...XWWWWWWWX...","....XXXXXXX...."],bolt:["......XX........",".....XYYX.......","....XYYX........","...XYYX.........","..XYYYYYYX......","...XXXYYX.......",".....XYYX.......","....XYYX........","...XYX..........","..XX............","XXXXXXXXXXXXXXXX","XEEEXEEEEEXEEEEX","XDDXDDDDDXDDDDDX","XXXXXXXXXXXXXXXX"],light:["..XYX..XXXX..XYX",".......XYYX.....","......XXXXXX....","......XRRRRX....","......XWWWWX....","......XRRRRX....",".....XWWWWWWX...",".....XRRRRRRX...",".....XWWWWWWX...","....XRRRRRRRRX..","....XWWWWWWWWX..","...XXXXXXXXXXXX.","..XUUUUUUUUUUUUX","..XVVUUUVVUUUVUX"],reel:["....XXXXXX......","...XwwwwwwX.....","..XwkkkkkkwX....",".XwkXXXXXXkwX...",".XwkXUUUUXkwX...",".XwkXUWWUXkwXXXX",".XwkXUWWUXkwXbbX",".XwkXUUUUXkwXXXX",".XwkXXXXXXkwX...","..XwkkkkkkwX....","...XwwwwwwX.....","....XXXXXX......"],scroll:["..XXXXXXXXXXXX..",".XEEEEEEEEEEEEX.","XEXXEEEEEEEEXEEX",".XEEEEEEEEEEEEX.","..XEbbbbbbbbEX..","..XEEEEEEEEEEX..","..XEbbbbbbEEEX..","..XEEEEEEEEEEX..","..XEbbbbbbbbEX..","..XEEEEEEEEEEX..","..XEbbbbbEEEEX..",".XEEEEEEEEEEEEX.","XEEXEEEEEEEEXXEX",".XXXXXXXXXXXXXX."],door:["..XXXXXXXXX.....",".XBBBBBBBBBX....",".XBbBBBBBbBX....",".XBbBBBBBbBX....",".XBBBBBBBBBX....",".XBbBBBBBbBX..Y.",".XBbBBBBYbBX.YY.",".XBbBBBBBbBXYYYY",".XBBBBBBBBBX.YY.",".XBbBBBBBbBX..Y.",".XBbBBBBBbBX....",".XBBBBBBBBBX....","XXXXXXXXXXXXXXXX"],flask:["....XXXXXX......",".....XWWX.......",".....XWWX.......","....XWWWWX......","...XWWWWWWX.....","..XVVVVVVVVX....",".XVWVVVVVVVVX...",".XVVVVUVVVVVX...",".XUUUUUUUUUUX...",".XUUUWUUUUUUX...","..XXXXXXXXXX...."],hook:["....XXX.........","....XwX.........","....XwX.........","....XwX.........","....XwX.........","....XwX....XX...","X...XwX...XwX...","XwX.XwX...XwX...","XwX.XwX..XwX....",".XwXXwXXXwX.....","..XwwwwwwX......","...XXXXXX......."],gear:["......XXXX......","..XX..XkkX..XX..",".XkkXXXkkXXXkkX.","..XkkkkkkkkkkX..","..XkkkXXXXkkkX..","XXXkkXwwwwXkkXXX","XkkkXwX..XwXkkkX","XkkkXwX..XwXkkkX","XXXkkXwwwwXkkXXX","..XkkkXXXXkkkX..","..XkkkkkkkkkkX..",".XkkXXXkkXXXkkX.","..XX..XkkX..XX..","......XXXX......"],seed:["......XX.XX.....",".....XgMXMgX....","....XgMMXMMgX...",".....XXgXgXX....","........X.......","........X.......","...XXXXXXXXXX...","..XBBBBBBBBBBX..","...XbbbbbbbbX...","...XBBBBBBBBX...","....XXXXXXXX...."],egg:["......XXXX......",".....XWWWWX.....","....XWWWWWWX....","...XWWYYWWWWX...","...XWWWWWWWWX...","..XWWWWWWWWWWX..","..XWXWXWXWXWWX..","..XXwXwXwXwXXX..","..XwwwwwwwwwwX..","...XwwwwwwwwX...","....XXXXXXXX...."],pouch:["......XXX.......",".....XbBbX......","......XXX.......","....XXBBBXX.....","...XBBBBBBBX....","..XBBBYYYBBBX...","..XBBYBBBBBBX...","..XBBBYYYBBBX...","..XBBBBBBYBBX...","..XBBBYYYBBBX...","...XBBBBBBBX....","....XXXXXXX....."],castle:["X.X.X.....X.X.X","XXXXX.....XXXXX","XwwwX.....XwwwX","XwwwXX.X.XXwwwX","XwwwXXXXXXXwwwX","XwwwwwwwwwwwwwX","XwKwwwwXwwwwKwX","XwwwwwXXXwwwwwX","XwwwwXbbbXwwwwX","XwwwwXbbbXwwwwX","XXXXXXXXXXXXXXX"],bulb:[".....XXXXX......","....XYYYYYX.....","...XYWWYYYYX....","...XYWYYYYYX....","...XYYYYYYYX....","....XYYYYYX.....",".....XyyyX......",".....XwwwX......",".....XkkkX......","......XXX......."],warn:[".......XX.......","......XYYX......",".....XYYYYX.....",".....XYKKYX.....","....XYYKKYYX....","....XYYKKYYX....","...XYYYKKYYYX...","...XYYYYYYYYX...","..XYYYYKKYYYYX..","..XYYYYYYYYYYX..",".XXXXXXXXXXXXXX."]};
-const ILL_MAP=[["REAL vs","salmon"],["PIPELINE","reel"],["COMPUTE","gear"],["EXIT CURVE","door"],["EVIDENCE","mag"],["FINGERPRINT","mask"],["CLONE","book"],["SHARK","sharkI"],["WATCHTOWER","light"],["PREDATOR","sharkI"],["QUAKE","bolt"],["STATION","light"],["FINDINGS","scroll"],["VITAL","heart"],["CASE","folder"],["POOLS TESTED","flask"],["HOOK","hook"],["REPRODUCE","chest"],["PHASE 1","seed"],["PHASE 2","egg"],["PHASE 3","pouch"],["PHASE 4","castle"],["SPARE","bulb"],["RISK","warn"]];
+const ILL_MAP=[["NEW TOKENS","egg"],["REAL vs","salmon"],["PIPELINE","reel"],["COMPUTE","gear"],["EXIT CURVE","door"],["EVIDENCE","mag"],["FINGERPRINT","mask"],["CLONE","book"],["SHARK","sharkI"],["WATCHTOWER","light"],["PREDATOR","sharkI"],["QUAKE","bolt"],["STATION","light"],["FINDINGS","scroll"],["VITAL","heart"],["CASE","folder"],["POOLS TESTED","flask"],["HOOK","hook"],["REPRODUCE","chest"],["PHASE 1","seed"],["PHASE 2","egg"],["PHASE 3","pouch"],["PHASE 4","castle"],["SPARE","bulb"],["RISK","warn"]];
 const ICON_PAL={X:"#241527",K:"#241527",V:"#BFEFFF",U:"#3FA9F5",u:"#1F6FC2",R:"#E8443F",r:"#FF8F7A",F:"#E8443F",W:"#FFFFFF",w:"#D9DEE8",k:"#6B7389",Y:"#FFD23F",y:"#E6A53A",B:"#9C5C33",b:"#663624",E:"#F3E2B8",T:"#D39452",q:"#E8A866",g:"#36924A",G:"#21643F",M:"#B4E67E",L:"#8BE06A",P:"#B27BEF",D:"#7A5A3A",d:"#4A2A1E",S:"#F7D2AA",s:"#E6A57D",A:"#F1EDE2",O:"#FF8A2A",C:"#EE8473"};
 function illustrate(){document.querySelectorAll(".pn h3:not([data-ill])").forEach(h=>{h.dataset.ill=1;const txt=(h.firstChild&&h.firstChild.textContent||h.textContent).trim().toUpperCase();
   const m=ILL_MAP.find(([k])=>txt.startsWith(k.toUpperCase()));const name=m?m[1]:"bobber",rows=ILL[name]||SPR[name];if(!rows)return;

@@ -82,6 +82,23 @@ npm run dev     # pakai data demo kalau DexPaprika tidak bisa dihubungi
 npm start       # sama seperti produksi
 ```
 
+## Token baru + paste CA (CHECK)
+
+- **Paste CA:** kotak pencarian di CHECK menerima alamat kontrak (`0x…`, 40 karakter). Kalau token itu belum ada di pool yang dipantau, server mengambil semua pool-nya dari DexPaprika (`/networks/robinhood/pools/search?token_address=…`, cache 60 detik), lalu CHECK langsung menilainya.
+- **Panel NEW TOKENS · ROBINHOOD CHAIN** (di bawah adegan danau): pool terbaru di chain, diambil di setiap refresh dengan `order_by=created_at`. Setiap baris berisi:
+  - simbol dan nama token, dengan label **NEW** kalau umurnya di bawah 1 jam
+  - umur, market cap (FDV dari DexPaprika), dan likuiditas
+  - CA dengan tombol **COPY**
+  - tombol **CHECK** untuk membuka token itu di CHECK, dan tombol **PONS** untuk membuka halaman token di Pons
+- Link Pons memakai template `PONS_TOKEN_URL` (default `https://ponsfamily.com/token/{ca}`, dengan `{ca}` diganti alamat token). **Cek format URL token di Pons**, lalu ubah variabel ini di Railway kalau berbeda.
+- API: `GET /api/new` → daftar token terbaru · `GET /api/lookup/<CA>` → semua pool token itu.
+- Kuota: ada 1 request tambahan per refresh untuk pool terbaru (sekitar 43 ribu per bulan dengan `REFRESH_SECONDS=60`), ditambah lookup CA dari pengguna.
+
+| Variabel | Default | |
+|---|---|---|
+| `PONS_TOKEN_URL` | `https://ponsfamily.com/token/{ca}` | format link tombol PONS |
+| `NEW_TOKENS_LIMIT` | 60 | jumlah token baru yang ditampilkan |
+
 ## Tampilan
 
 Seluruh UI bergaya game pixel RPG: panel kayu dengan isi perkamen, judul berupa tab hijau, tombol pixel, dan font Pixelify Sans / Press Start 2P.
