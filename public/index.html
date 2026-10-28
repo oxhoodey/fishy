@@ -355,7 +355,9 @@ header.top b{color:var(--cream)}
 .nt .fresh{display:inline-block;font:7px "Press Start 2P",monospace;background:#5FCB6A;color:#FFFFFF;border-radius:3px;padding:3px 4px;margin-left:6px;vertical-align:middle}
 .nt .ca{font:600 12px ui-monospace,monospace;color:#3B2416;margin-right:6px}
 .nt button,.nt a.src{font:8px "Press Start 2P",monospace;border:2px solid #3B2416;border-radius:4px;padding:6px 7px;cursor:pointer;text-decoration:none;display:inline-block;margin-left:4px}
-.nt .cp{background:#BDF4FF;color:#0A1640}.nt .cp.ok{background:#5FCB6A;color:#FFFFFF}.nt .ck{background:#3E8E5E;color:#FFF6DC}.nt a.src{min-width:64px;text-align:center}.nt a.pons{background:#FFD23F;color:#3B2416}.nt a.flap{background:#B27BEF;color:#FFFFFF}.nt a.dex{background:#3FA9F5;color:#FFFFFF}
+.nt .cp{background:#BDF4FF;color:#0A1640}.nt .cp.ok{background:#5FCB6A;color:#FFFFFF}.nt .ck{background:#3E8E5E;color:#FFF6DC}.nt a.src{min-width:64px;text-align:center}.nt a.pons{background:#FFD23F;color:#3B2416}.nt a.flap{background:#B27BEF;color:#FFFFFF}.nt a.dex{background:#3FA9F5;color:#FFFFFF}.nt a.pad{background:#FF8A2A;color:#FFFFFF}
+.nt .bond{display:inline-flex;align-items:center;gap:5px;font:7px "Press Start 2P",monospace;color:#9C5C33;margin-left:6px;vertical-align:middle}.nt .bond b{display:inline-block;width:46px;height:7px;border:2px solid #3B2416;border-radius:3px;background:#F3E2B8;overflow:hidden}.nt .bond u{display:block;height:100%;background:#FFD23F}.nt .bond.grad{color:#3E8E5E}
+.ntf{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}.ntf button{font:8px "Press Start 2P",monospace;border:2px solid #3B2416;border-radius:4px;padding:6px 8px;background:#FFF6DC;color:#3B2416;cursor:pointer}.ntf button.on{background:#3B2416;color:#FFD23F}.ntf i{font-style:normal;opacity:.7;margin-left:5px}
 .nt tr.sel td{background:#FFE9A8}.nt .empty td{text-align:center!important;color:#8B5A2B}
 #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);opacity:0;transition:.25s;background:#241527;color:#FFF6DC;font:9px "Press Start 2P",monospace;padding:10px 14px;border-radius:6px;z-index:60;pointer-events:none}
 #toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
@@ -452,6 +454,7 @@ footer .note{max-width:70%}
   </div></div>
 
   <section class="pn newtok" id="newtok"><h3>NEW TOKENS · ROBINHOOD CHAIN<span id="ntInfo">SCANNING…</span></h3>
+    <div class="ntf" id="ntF" role="group" aria-label="Filter by launchpad"><button type="button" data-f="all">ALL<i>0</i></button><button type="button" data-f="pons">PONS<i>0</i></button><button type="button" data-f="flap">FLAP<i>0</i></button><button type="button" data-f="other">OTHER PADS<i>0</i></button><button type="button" data-f="dex">DEX<i>0</i></button></div>
     <div class="ntwrap"><table class="nt"><thead><tr><th>TOKEN</th><th>AGE</th><th>MARKET CAP</th><th class="hide2">LIQUIDITY</th><th>CA</th><th></th></tr></thead><tbody id="ntBody"></tbody></table></div></section>
 
   <div class="streamhead"><span class="cap">event stream</span><span class="cap">window 12 s · now →</span></div>
@@ -1510,26 +1513,33 @@ function applySite(){const xb=$("xbtn"),xh=$("xh");if(SITE.xUrl){xb.href=SITE.xU
   bt.onclick=async()=>{let ok=false;try{await navigator.clipboard.writeText(SITE.ca);ok=true}catch(_){try{const r=document.createRange();r.selectNodeContents(ca);const sel=getSelection();sel.removeAllRanges();sel.addRange(r);ok=document.execCommand("copy");sel.removeAllRanges()}catch(__){}}
     if(ok){bx.classList.add("copied");bt.textContent="COPIED!";setTimeout(()=>{bx.classList.remove("copied");bt.textContent="COPY"},1600)}}}
 let booted=false;
-const NT={list:[],at:null};
+const NT={list:[],at:null,filter:(()=>{try{return localStorage.getItem("fishyNtF")||"all"}catch(_){return"all"}})()};
 const agoShort=ms=>{if(!(ms>=0))return"—";const m=ms/60000;return m<1?"now":m<60?Math.round(m)+"m":m<1440?Math.round(m/60)+"h":Math.round(m/1440)+"d"};
 const SRC={pons:{label:"PONS",cls:"pons",url:()=>SITE.ponsUrl||"https://ponsfamily.com/launchpad/{ca}"},flap:{label:"FLAP",cls:"flap",url:()=>SITE.flapUrl||"https://flap.sh/robinhood/{ca}"},dex:{label:"DEX",cls:"dex",url:()=>SITE.dexUrl||"https://dexpaprika.com/robinhood/token/{ca}"}};
+// any other launchpad the server spotted on-chain: button carries its name and opens the token on the explorer (or DexPaprika)
+const otherUrl=()=>SITE.explorer?SITE.explorer.replace(/\/$/,"")+"/token/{ca}":(SITE.dexUrl||"https://dexpaprika.com/robinhood/token/{ca}");
 // fallback when the server has not classified a token yet: Flap tokens use vanity 8888/7777 addresses
-function srcOf(t){if(t.src&&SRC[t.src])return t.src;if(/pons/i.test(t.dex||""))return"pons";if(/flap/i.test(t.dex||"")||/(7777|8888)$/i.test(t.id||""))return"flap";return"dex"}
-function srcLink(t){const k=srcOf(t);return{k,label:SRC[k].label,cls:SRC[k].cls,href:SRC[k].url().replace("{ca}",t.id)}}
-function renderNew(){const b=$("ntBody");if(!b)return;const L=NT.list;if(S.chipMode==="new"&&VIEW!=="larp")chips();
+function srcOf(t){if(t.src&&SRC[t.src])return t.src;if(t.src&&t.srcName)return t.src;if(/pons/i.test(t.dex||""))return"pons";if(/flap/i.test(t.dex||"")||/(7777|8888)$/i.test(t.id||""))return"flap";return"dex"}
+function srcLink(t){const k=srcOf(t);if(SRC[k])return{k,label:SRC[k].label,cls:SRC[k].cls,href:SRC[k].url().replace("{ca}",t.id)};
+  return{k,label:String(t.srcName||k).toUpperCase().slice(0,11),cls:"pad",href:otherUrl().replace("{ca}",t.id)}}
+const ntGroup=t=>{const k=srcOf(t);return k==="pons"||k==="flap"||k==="dex"?k:"other"};
+function renderNew(){const b=$("ntBody");if(!b)return;const F=NT.filter||"all",L=NT.list.filter(t=>F==="all"||ntGroup(t)===F);
+  document.querySelectorAll("#ntF button").forEach(x=>{const k=x.dataset.f,n=k==="all"?NT.list.length:NT.list.filter(t=>ntGroup(t)===k).length;x.classList.toggle("on",k===F);x.querySelector("i").textContent=n});if(S.chipMode==="new"&&VIEW!=="larp")chips();
   $("ntInfo").textContent=(S.mode==="live"?"LIVE":"DEMO")+" · "+L.length+" NEWEST";
-  if(!L.length){b.innerHTML=`<tr class="empty"><td colspan="6">No new pools yet. Refreshes every minute.</td></tr>`;return}
+  if(!L.length){b.innerHTML=`<tr class="empty"><td colspan="6">${F==="all"?"No new tokens yet.":"No "+F.toUpperCase()+" launches spotted yet."} Refreshes every minute.</td></tr>`;return}
   b.innerHTML=L.map(t=>{const age=Date.now()-Date.parse(t.created),short=t.id.length>14?t.id.slice(0,6)+"…"+t.id.slice(-4):t.id,sel=S.sel&&S.sel.id===t.id?" sel":"";
-    return `<tr class="${sel}"><td><span class="sy">${esc(t.sym)}</span>${age<36e5?'<span class="fresh">NEW</span>':""}<span class="nm">${esc(t.name||"")} · ${esc(t.pair||"")}</span></td>
-      <td class="num">${agoShort(age)}</td><td class="num">${t.mc?money(t.mc):"—"}</td><td class="num hide2">${money(t.liq||0)}</td>
+    return `<tr class="${sel}"><td><span class="sy">${esc(t.sym)}</span>${age<36e5?'<span class="fresh">NEW</span>':""}<span class="nm">${esc(t.name||"")}${t.pair?" · "+esc(t.pair):""}</span>${t.status==="bonding"?`<span class="bond" title="Still on the launchpad bonding curve">BONDING${t.progress!=null?` ${Math.round(t.progress*100)}%<b><u style="width:${Math.round(t.progress*100)}%"></u></b>`:""}</span>`:t.status==="dex"&&t.srcName?'<span class="bond grad">GRADUATED</span>':""}</td>
+      <td class="num">${agoShort(age)}</td><td class="num">${t.mc?money(t.mc):"—"}</td><td class="num hide2">${t.liq?money(t.liq):"—"}</td>
       <td><span class="ca" title="${esc(t.id)}">${esc(short)}</span><button class="cp" data-ca="${esc(t.id)}" type="button">COPY</button></td>
-      <td><button class="ck" data-check="${esc(t.id)}" type="button">CHECK</button>${(()=>{const L=srcLink(t);return `<a class="src ${L.cls}" href="${esc(L.href)}" target="_blank" rel="noopener noreferrer" title="Open on ${L.label==="DEX"?"DexPaprika":L.label}">${L.label} ↗</a>`})()}</td></tr>`}).join("")}
+      <td><button class="ck" data-check="${esc(t.id)}" type="button">CHECK</button>${(()=>{const L=srcLink(t);return `<a class="src ${L.cls}" href="${esc(L.href)}" target="_blank" rel="noopener noreferrer" title="Open on ${L.label==="DEX"?"DexPaprika":L.cls==="pad"?"the explorer (launched on "+L.label+")":L.label}">${L.label} ↗</a>`})()}</td></tr>`}).join("")}
 function demoNew(){const now=Date.now(),ts=tradable().filter(t=>!HUB.has(t.sym.toUpperCase())).slice(0,10);
-  return ts.map((t,i)=>({id:t.id.startsWith("0x")?t.id:"0x"+(t.sym+"000000000000000000000000000000000000000").replace(/[^0-9a-f]/gi,"a").slice(0,40).toLowerCase(),sym:t.sym,name:t.name,pair:"WETH",mc:t.R*2*(3+i),liq:t.R*2,src:["pons","dex","flap"][i%3],created:new Date(now-(i*i*7+3)*60000).toISOString()}))}
+  return ts.map((t,i)=>({id:t.id.startsWith("0x")?t.id:"0x"+(t.sym+"000000000000000000000000000000000000000").replace(/[^0-9a-f]/gi,"a").slice(0,40).toLowerCase(),sym:t.sym,name:t.name,pair:"WETH",mc:t.R*2*(3+i),liq:t.R*2,src:["pons","dex","flap","hoodfun"][i%4],srcName:i%4===3?"HOOD.FUN":undefined,status:i%2?"dex":"bonding",progress:i%2?null:Math.min(.97,.12+i*.11),created:new Date(now-(i*i*7+3)*60000).toISOString()}))}
 async function loadNew(){if(S.mode==="live"){try{const r=await fetch("api/new",{cache:"no-store"});if(r.ok){const j=await r.json();NT.list=j.tokens||[];NT.at=j.updatedAt}}catch(_){}}else NT.list=demoNew();renderNew()}
-document.addEventListener("click",async e=>{const cp=e.target.closest(".nt .cp");if(cp){const ca=cp.dataset.ca;let ok=false;try{await navigator.clipboard.writeText(ca);ok=true}catch(_){}
+document.addEventListener("click",async e=>{const fb=e.target.closest("#ntF button");if(fb){NT.filter=fb.dataset.f;try{localStorage.setItem("fishyNtF",NT.filter)}catch(_){}renderNew();return}
+  const cp=e.target.closest(".nt .cp");if(cp){const ca=cp.dataset.ca;let ok=false;try{await navigator.clipboard.writeText(ca);ok=true}catch(_){}
     cp.textContent=ok?"COPIED":"COPY?";cp.classList.toggle("ok",ok);setTimeout(()=>{cp.textContent="COPY";cp.classList.remove("ok")},1500);if(!ok)toastMsg(ca);return}
-  const ck=e.target.closest(".nt .ck");if(ck){const ca=ck.dataset.check;let t=S.tokens.get(ca)||find(ca);if(!t&&isCA(ca))t=await lookupCA(ca);if(t){if(VIEW!=="check")setView("check");scan(t,true);renderNew();document.getElementById("stage").scrollIntoView({behavior:"smooth",block:"center"})}}});
+  const ck=e.target.closest(".nt .ck");if(ck){const ca=ck.dataset.check;const nt=NT.list.find(x=>x.id===ca);
+    if(nt&&nt.status==="bonding"&&!S.tokens.get(ca)){toastMsg(nt.sym+" is still on the "+srcLink(nt).label+" bonding curve. No DEX pool to check yet.");return}let t=S.tokens.get(ca)||find(ca);if(!t&&isCA(ca))t=await lookupCA(ca);if(t){if(VIEW!=="check")setView("check");scan(t,true);renderNew();document.getElementById("stage").scrollIntoView({behavior:"smooth",block:"center"})}}});
 setInterval(()=>{if(VIEW==="check")loadNew()},60000);setInterval(renderNew,30000);
 (function(){const b=$("lblbtn");if(!b)return;const sync=()=>{b.textContent=LBL.on?"LABELS ON":"LABELS OFF";b.setAttribute("aria-pressed",LBL.on);b.closest(".howto").classList.toggle("min",false)};sync();
   b.addEventListener("click",()=>{LBL.on=!LBL.on;try{localStorage.setItem("fishyLabels",LBL.on?"1":"0")}catch(_){}sync()})})();

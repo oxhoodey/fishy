@@ -5,6 +5,7 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const swaptest = require("./swaptest");
+const launchpads = require("./launchpads");
 
 const CFG = {
   port: +process.env.PORT || 8787,
@@ -166,13 +167,15 @@ async function lookupToken(addr) {
   return d;
 }
 // where a token was launched: Pons (graduationStatus on the Pons factory/locker), Flap (vanity 8888/7777 addresses, per Flap docs) or straight on a DEX
-const PONS_CONTRACTS = (process.env.PONS_CONTRACTS || "0xA5aAb3F0c6EeadF30Ef1D3Eb997108E976351feB,0x736D76699C26D0d966744cAe304C000d471f7F35,0x0c37a24F5D23A486FA692d1500881d698B1F77a4,0x31ca5E101941A93A7DD6d0497928700625CF54B5")
+const PONS_CONTRACTS = (process.env.PONS_CONTRACTS || "0x7ed598bcef8bd9edd8c97a195c6d13f40801ec7e,0xA5aAb3F0c6EeadF30Ef1D3Eb997108E976351feB,0x736D76699C26D0d966744cAe304C000d471f7F35,0x0c37a24F5D23A486FA692d1500881d698B1F77a4,0x31ca5E101941A93A7DD6d0497928700625CF54B5")
   .split(",").map((x) => x.trim()).filter(Boolean);
 const GRAD_SEL = swaptest.selector("graduationStatus(address)");
 const SRC_CACHE = new Map();
 async function classifyToken(addr, dex) {
   const a = String(addr).toLowerCase(), hit = SRC_CACHE.get(a);
   if (hit && (hit.src !== "dex" || Date.now() - hit.t < 30 * 60000)) return hit.src;
+  const seen = launchpads.known(a); // spotted launching on-chain by the launchpad scanner
+  if (seen) return seen.src;
   let src = "dex";
   if (/pons/i.test(dex || "")) src = "pons";
   else if (/flap/i.test(dex || "") || /(7777|8888)$/.test(a)) src = "flap";
@@ -191,6 +194,18 @@ async function classifyToken(addr, dex) {
 async function classifyAll(list) {
   for (let i = 0; i < list.length; i += 6) await Promise.all(list.slice(i, i + 6).map(async (t) => { t.src = await classifyToken(t.id, t.dex); }));
   return list;
+}
+// tokens the on-chain scanner saw launch (bonding curves included) + DexPaprika's newest pools, newest first
+function mergeLaunches(dexList, pools) {
+  const onDex = new Set();
+  for (const p of pools) { onDex.add(String(p.a.id).toLowerCase()); onDex.add(String(p.b.id).toLowerCase()); }
+  const byId = new Map(dexList.map((t) => [String(t.id).toLowerCase(), t]));
+  for (const l of launchpads.list(quoteUsdOf("WETH"), onDex)) {
+    const d = byId.get(l.id);
+    if (d) { d.src = l.src; d.srcName = l.srcName; d.status = "dex"; continue; } // graduated: keep DEX numbers, label the launchpad
+    byId.set(l.id, l);
+  }
+  return [...byId.values()].sort((a, b) => Date.parse(b.created || 0) - Date.parse(a.created || 0)).slice(0, CFG.newTokens + 40);
 }
 function newTokenList(pools) {
   const seen = new Set(), out = [];
@@ -319,7 +334,7 @@ async function refresh() {
     const activity = detectQuakes(pools, Date.parse(t));
     history.push({ t, index, activity });
     while (history.length > CFG.historyMax) history.shift();
-    const newTokens = await classifyAll(newTokenList(newPools));
+    const newTokens = mergeLaunches(await classifyAll(newTokenList(newPools)), pools);
     snapshot = { chain: CFG.chain, updatedAt: t, error: null, pools, index, history: history.slice(-288), newTokens };
     broadcast("pools", snapshot);
     console.log(`[${t}] ${pools.length} pools · index`, index);
@@ -395,6 +410,7 @@ const server = http.createServer((req, res) => {
   }
   if (u.pathname === "/api/health") return send(res, 200, { ok: !snapshot.error, updatedAt: snapshot.updatedAt, pools: snapshot.pools.length, error: snapshot.error, clients: clients.size });
   if (u.pathname === "/api/config") return send(res, 200, publicConfig());
+  if (u.pathname === "/api/launchpads") return send(res, 200, launchpads.status());
   if (u.pathname === "/api/new") return send(res, 200, { updatedAt: snapshot.updatedAt, tokens: snapshot.newTokens || [] });
   if (u.pathname.startsWith("/api/lookup/")) {
     const addr = decodeURIComponent(u.pathname.slice(12)).trim().toLowerCase();
@@ -424,5 +440,11 @@ if (require.main === module) {
   process.on("SIGTERM", stop); process.on("SIGINT", stop);
   refresh();
   setInterval(refresh, CFG.refreshMs);
+  // launchpad scanner (needs RPC_URL; set LAUNCHPAD_SCAN=0 to switch off)
+  if (process.env.LAUNCHPAD_SCAN !== "0") {
+    let busy = false;
+    const tick = async () => { if (busy) return; busy = true; try { await launchpads.scan(); } catch (e) { console.warn("launchpad scan:", e.message); } busy = false; };
+    tick(); setInterval(tick, +process.env.LAUNCH_SCAN_MS || 20000);
+  }
 }
 module.exports = { normalize, tokenExits, chainIndex, category, swapTestToken };

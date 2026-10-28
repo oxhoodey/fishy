@@ -101,6 +101,26 @@ npm start       # sama seperti produksi
   - `FLAP_TOKEN_URL` = `https://flap.sh/robinhood/{ca}` (**belum dipastikan**: cek satu token di Flap, lalu sesuaikan di Railway)
   - `DEX_TOKEN_URL` = `https://dexpaprika.com/robinhood/token/{ca}`
   - `PONS_CONTRACTS` = daftar kontrak Pons yang dicek (default: factory dan locker aktif serta lama, dari dokumentasi Mobula)
+### Scanner launchpad on-chain (Pons, Flap, dan launchpad lain)
+
+DexPaprika hanya mengindeks Uniswap V2/V3/V4 di Robinhood Chain, jadi token yang masih di bonding curve launchpad tidak pernah muncul di sana. Karena itu server juga membaca chain langsung lewat `RPC_URL` (file `launchpads.js`), setiap 20 detik:
+
+- **Pons V2**: event `TokenLaunched` di factory `0x7ed598bc…7ec7e`, lalu `CurveBuy`/`CurveSell` di kontrak curve tiap token. Dari situ FISHY menghitung harga, market cap (dalam USD lewat harga WETH dari DexPaprika) dan progres menuju graduation (`BONDING 25%`).
+- **Flap dan launchpad lain** (hood.fun, LaunchHood, Virtuals, Klik, Doppler, Ape.store, Bags, Clanker, pools.trade, trench): token ERC-20 baru yang di-mint ke kontrak launchpad, atau di transaksi yang dikirim ke kontrak launchpad (aturan yang sama dipakai Bitquery). Token Flap juga dikenali dari alamat vanity `8888`/`7777`.
+- Token yang sudah punya pool di DexPaprika ditandai **GRADUATED**, tapi tombolnya tetap ke launchpad asalnya.
+- Saat start, scanner membaca mundur `LAUNCH_BACKFILL_BLOCKS` blok (default 60.000). Ukuran range `eth_getLogs` otomatis mengecil kalau RPC menolak range besar.
+- Status scanner: `GET /api/launchpads` (blok terakhir, jumlah token, error terakhir). Kalau `tracked` tetap 0 dan ada `lastError`, RPC publik kemungkinan membatasi `eth_getLogs`: pakai RPC privat (Alchemy/QuickNode/dll) di `RPC_URL`.
+- Tombol launchpad lain (oranye, misalnya `HOOD.FUN ↗`) membuka halaman token di explorer (`EXPLORER_URL`), atau DexPaprika kalau explorer tidak diisi.
+
+| Variabel | Default | |
+|---|---|---|
+| `LAUNCHPAD_SCAN` | `1` | `0` = matikan scanner |
+| `LAUNCH_SCAN_MS` | `20000` | jeda antar scan |
+| `LAUNCH_BACKFILL_BLOCKS` | `60000` | berapa blok ke belakang saat start |
+| `LAUNCH_MAX_RANGE` | `20000` | range awal `eth_getLogs` |
+| `PONS_V2_FACTORY` | `0x7ed598bcef8bd9edd8c97a195c6d13f40801ec7e` | factory Pons V2 |
+| `LAUNCHPADS_JSON` | – | tambah/ganti launchpad: `[{"key":"x","name":"X","addrs":["0x…"]}]` |
+
 - API: `GET /api/new` → daftar token terbaru · `GET /api/lookup/<CA>` → semua pool token itu.
 - Kuota: ada 1 request tambahan per refresh untuk pool terbaru (sekitar 43 ribu per bulan dengan `REFRESH_SECONDS=60`), ditambah lookup CA dari pengguna.
 
