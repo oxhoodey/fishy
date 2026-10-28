@@ -85,6 +85,7 @@ npm start       # sama seperti produksi
 ## Token baru + paste CA (CHECK)
 
 - **Paste CA:** kotak pencarian di CHECK menerima alamat kontrak (`0x…`, 40 karakter). Kalau token itu belum ada di pool yang dipantau, server mengambil semua pool-nya dari DexPaprika (`/networks/robinhood/pools/search?token_address=…`, cache 60 detik), lalu CHECK langsung menilainya.
+- **Chip 🔥 TOP / 🆕 NEW** di atas adegan: TOP menampilkan 12 token dengan volume terbesar, sedangkan NEW menampilkan 12 token terbaru beserta umurnya (klik untuk mengecek). Pilihannya diingat di browser.
 - **Panel NEW TOKENS · ROBINHOOD CHAIN** (di bawah adegan danau): pool terbaru di chain, diambil di setiap refresh dengan `order_by=created_at`. Setiap baris berisi:
   - simbol dan nama token, dengan label **NEW** kalau umurnya di bawah 1 jam
   - umur, market cap (FDV dari DexPaprika), dan likuiditas
