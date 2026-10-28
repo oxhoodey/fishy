@@ -66,6 +66,10 @@ header.top{display:flex;align-items:flex-end;gap:24px;flex-wrap:wrap}
 .ctl select{border:1px solid var(--gray2);background:var(--paper);padding:1px 4px;font-size:10px}
 .ctl button{border:1px solid var(--ink);background:var(--ink);color:var(--paper);padding:2px 8px;font-size:10px;cursor:pointer;letter-spacing:.06em}
 .ctl button.off{background:none;color:var(--ink)}
+.tip{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0 10px;padding:10px 12px;background:#FFF6DC;border:3px solid #3B2416;border-radius:6px;box-shadow:3px 3px 0 rgba(40,24,12,.35);font:14px/1.45 "Pixelify Sans",ui-monospace,monospace;color:#3B2416}
+.tip[hidden]{display:none}.tip b{font:9px "Press Start 2P",monospace;color:#9E1B2E;flex-basis:100%}.tip span{flex:1;min-width:220px}.tip button{font:8px "Press Start 2P",monospace;background:#3E8E5E;color:#FFF6DC;border:2px solid #3B2416;border-radius:4px;padding:7px 9px;cursor:pointer}
+@media (max-width:600px){.pn h3{flex-wrap:wrap}.pn h3 span{text-align:left}}
+@media (max-width:600px){.ctl{flex-wrap:wrap}.ctl #q{width:100%!important;flex:1 1 100%;font-size:16px}}
 
 /* tree */
 .stagewrap{overflow-x:auto;margin-top:6px}
@@ -402,13 +406,27 @@ footer .note{max-width:70%}
 .stream{background:var(--paper);border:4px solid var(--wood2);border-radius:6px;box-shadow:0 0 0 3px var(--wood3);height:38px}
 .seisbar .cap{color:#FFF6DC;text-shadow:1px 1px 0 #2E5A1E}
 .stage,.swstage{background:#3FB6FF}
+.tabs button small{display:block;font:9px "Pixelify Sans",ui-monospace,monospace;letter-spacing:0;text-transform:none;opacity:.85;margin-top:3px;font-weight:400}
+.sub .ctl{flex:1;flex-wrap:wrap}.qwrap{flex:1 1 320px;display:flex;align-items:center;background:#FFF6DC;border:4px solid var(--wood2);border-radius:6px;box-shadow:0 0 0 3px var(--wood3);padding:0 8px}
+.qwrap .qlab{font-size:18px;margin-right:6px}.qwrap input#q{flex:1;border:0!important;background:transparent!important;font-size:17px!important;padding:12px 4px!important;min-width:0;box-shadow:none!important;outline:none;width:auto!important}
+#go{font-size:11px!important;padding:12px 16px!important}
+.verdict:empty{display:none}.verdict{display:flex;gap:16px;align-items:flex-start;margin:12px 0;padding:14px 16px;background:var(--paper);border:4px solid var(--wood2);border-radius:6px;box-shadow:0 0 0 3px var(--wood3),5px 6px 0 3px rgba(40,24,12,.35)}
+.verdict .vg{flex:0 0 auto;width:74px;height:74px;display:grid;place-items:center;font:34px "Press Start 2P",monospace;color:#fff;border:4px solid #241527;border-radius:8px;text-shadow:3px 3px 0 rgba(0,0,0,.3)}
+.vg.gA{background:#2E9E5B}.vg.gB{background:#5FB0E0}.vg.gC{background:#E8A33A}.vg.gD{background:#E8723A}.vg.gF{background:#D7263D}
+.verdict .vb{flex:1;min-width:0}.verdict .vh{font:13px "Press Start 2P",monospace;color:#3B2416;line-height:1.5}.verdict .vh span{display:block;font:13px "Pixelify Sans",monospace;color:#8B5A2B}
+.verdict p{margin:6px 0 8px;font-size:15px;color:#3B2416}.verdict .vf{display:flex;flex-wrap:wrap;gap:8px 20px;font:12px "Press Start 2P",monospace;color:#241527}.verdict .vf i{display:block;font:10px "Pixelify Sans",monospace;font-style:normal;color:#8B5A2B;margin-bottom:3px}
+.vflags{margin:10px 0 0;padding:0;list-style:none;display:flex;flex-wrap:wrap;gap:6px}.vflags li{background:#FFE1DA;color:#9E1B2E;border:2px solid #D7263D;border-radius:4px;padding:3px 8px;font-size:13px}.vok{margin-top:10px;color:#2E7D46;font-size:13px}
+.verdict .vgo{display:flex;flex-direction:column;gap:6px}.verdict .vgo button{font:8px "Press Start 2P",monospace;background:#3E8E5E;color:#FFF6DC;border:3px solid #241527;border-radius:4px;padding:8px 10px;cursor:pointer;white-space:nowrap}
+@media (max-width:700px){.verdict{flex-wrap:wrap}.verdict .vg{width:56px;height:56px;font-size:26px}.verdict .vgo{flex-direction:row;flex-wrap:wrap;width:100%}}
+body:not([data-view="check"]) .strip,body:not([data-view="check"]) #topo{display:none}body[data-view="road"] .verdict{display:none}
+.hood{margin-top:14px}.hood>summary{cursor:pointer;list-style:none;font:9px "Press Start 2P",monospace;color:#FFF6DC;background:#5C3A1A;border:3px solid #241527;border-radius:6px;padding:12px 14px;text-shadow:1px 1px 0 #241527}.hood>summary span{opacity:.75;font-family:"Pixelify Sans",monospace;font-size:13px}.hood[open]>summary{margin-bottom:10px}
 </style>
 
 <div id="offline" role="alert"><div class="card"><h2>THE LAKE IS FROZEN</h2><p>Live data from DexPaprika is unavailable right now, so FISHY is not showing any grades.</p><p class="mut" id="offmsg">Retrying in 30 s…</p></div></div>
 <div class="wrap">
   <header class="top">
     <div class="brand" aria-label="FISHY"><canvas id="logo" width="10" height="10" role="img" aria-label="FISHY logo"></canvas><span class="lsub"><b>◆</b><span id="labname">LIQUIDITY LAB</span><b>◆</b></span></div>
-    <nav class="tabs" aria-label="Modules"><button data-v="check" class="on">CHECK</button><button data-v="larp">LARP SCAN</button><button data-v="seis">SHARK WATCH</button><button data-v="aut">AUTOPSY</button><button data-v="swap">SWAP TEST</button><button data-v="road">ROADMAP</button></nav>
+    <nav class="tabs" aria-label="Modules"><button data-v="check" class="on">CHECK<small>is the volume real?</small></button><button data-v="larp">LARP SCAN<small>is it a copy?</small></button><button data-v="seis">SHARK WATCH<small>who got rugged?</small></button><button data-v="aut">AUTOPSY<small>how did it die?</small></button><button data-v="swap">SWAP TEST<small>can i sell it?</small></button><button data-v="road">ROADMAP<small>what is next</small></button></nav>
     <div class="navx" id="navx">
       <a class="xbtn" id="xbtn" target="_blank" rel="noopener noreferrer" aria-label="FISHY on X"><i class="xl"><svg viewBox="0 0 9 9" width="18" height="18" shape-rendering="crispEdges" aria-hidden="true"><g fill="#111018"><rect x="0" y="0" width="2" height="1"/><rect x="1" y="1" width="2" height="1"/><rect x="2" y="2" width="2" height="1"/><rect x="3" y="3" width="3" height="1"/><rect x="3" y="4" width="3" height="1"/><rect x="3" y="5" width="3" height="1"/><rect x="5" y="6" width="2" height="1"/><rect x="6" y="7" width="2" height="1"/><rect x="7" y="8" width="2" height="1"/><rect x="7" y="0" width="2" height="1"/><rect x="6" y="1" width="2" height="1"/><rect x="5" y="2" width="2" height="1"/><rect x="2" y="6" width="2" height="1"/><rect x="1" y="7" width="2" height="1"/><rect x="0" y="8" width="2" height="1"/></g></svg></i><span id="xh">FOLLOW</span></a>
       <div class="cabox" id="cabox"><span class="lab">CA</span><a class="cav" id="ca" target="_blank" rel="noopener noreferrer">COMING SOON</a><button type="button" id="cacopy" aria-label="Copy contract address">COPY</button></div>
@@ -417,26 +435,28 @@ footer .note{max-width:70%}
     <div class="hstat">
       <span class="sim" id="mode"><i></i>DEMO</span>
       <div class="hide"><span class="cap">pools scanned</span><b class="num" id="hPools">0000</b></div>
-      <div><span class="cap">packets</span><b class="num" id="hPk">000</b></div>
-      <div><span class="cap">wash loops</span><b class="num" id="hWash">00</b></div>
-      <div><span class="cap">verdict</span><b class="num" id="hVer">—</b></div>
-      <div class="hide"><span class="cap">frame</span><b class="num" id="hFr">0.00 ms</b></div>
+      <div style="display:none"><span class="cap">packets</span><b class="num" id="hPk">000</b></div>
+      <div><span class="cap">fake-volume pools</span><b class="num" id="hWash">00</b></div>
+      <div><span class="cap">grade</span><b class="num" id="hVer">—</b></div>
+      <div style="display:none"><span class="cap">frame</span><b class="num" id="hFr">0.00 ms</b></div>
     </div>
   </header>
 
+  <div class="sub">
+    <span class="ctl">
+      <span class="qwrap"><span class="qlab">🔎</span><input id="q" placeholder="Paste a token CA (0x…) or type a ticker" aria-label="Token" list="tl" autocomplete="off"></span><datalist id="tl"></datalist>
+      <label class="cap" for="size" style="display:flex;gap:6px;align-items:center" title="How much you would sell. Used for the exit and swap checks.">my sell size <input type="range" id="size" min="2" max="6" step="0.05" value="3" style="width:110px;accent-color:#111"><b class="num" id="sizev" style="min-width:44px">$1.0K</b></label>
+      <button id="go">CHECK IT</button><button id="auto" class="off" aria-pressed="false" title="Auto-cycle through tokens when idle">AUTO ○</button>
+    </span>
+  </div>
+  <div class="sub" style="margin-top:4px"><span class="chips" id="chips"></span><span class="cap mut" id="crit">crypto only · stock tokens excluded · cap 10× liq/day</span></div>
+  <section class="verdict" id="verdict" aria-live="polite"></section>
   <section class="strip" aria-label="Token metrics">
     <canvas id="stripc"></canvas>
     <div class="cells" id="cells"></div>
   </section>
-  <div class="sub">
-    <span class="cap" id="topo">token · — · pools 0 · dust 0 · pairs 0</span>
-    <span class="ctl">
-      <input id="q" placeholder="symbol or paste a 0x… CA" aria-label="Token" list="tl" autocomplete="off"><datalist id="tl"></datalist>
-      <label class="cap" for="size" style="display:flex;gap:6px;align-items:center">probe <input type="range" id="size" min="2" max="6" step="0.05" value="3" style="width:110px;accent-color:#111"><b class="num" id="sizev" style="min-width:44px">$1.0K</b></label>
-      <button id="go">SCAN</button><button id="auto" aria-pressed="true">AUTO ●</button>
-    </span>
-  </div>
-  <div class="sub" style="margin-top:4px"><span class="chips" id="chips"></span><span class="cap mut" id="crit">crypto only · stock tokens excluded · cap 10× liq/day</span></div>
+  <div class="sub"><span class="cap" id="topo">—</span></div>
+  <div class="tip" id="tip" role="note"><b id="tipq"></b><span id="tipt"></span><button type="button" id="tipx" aria-label="Hide this tip">GOT IT</button></div>
 
   <div id="v-check">
   <div class="stagewrap"><div class="stage" id="stage">
@@ -457,6 +477,7 @@ footer .note{max-width:70%}
     <div class="ntf" id="ntF" role="group" aria-label="Filter by launchpad"><button type="button" data-f="all">ALL<i>0</i></button><button type="button" data-f="pons">PONS<i>0</i></button><button type="button" data-f="flap">FLAP<i>0</i></button><button type="button" data-f="other">OTHER PADS<i>0</i></button><button type="button" data-f="dex">DEX<i>0</i></button></div>
     <div class="ntwrap"><table class="nt"><thead><tr><th>TOKEN</th><th>AGE</th><th>MARKET CAP</th><th class="hide2">LIQUIDITY</th><th>CA</th><th></th></tr></thead><tbody id="ntBody"></tbody></table></div></section>
 
+  <details class="hood" id="hood"><summary>🔧 UNDER THE HOOD · HOW FISHY WORKS THIS OUT <span>(charts, formulas, exit curve)</span></summary>
   <div class="streamhead"><span class="cap">event stream</span><span class="cap">window 12 s · now →</span></div>
   <div class="stream"><canvas id="evc"></canvas></div>
 
@@ -467,6 +488,7 @@ footer .note{max-width:70%}
     <section class="pn"><h3>COMPUTE TRACE<span>FORMULAS</span></h3><div class="trace" id="trace"></div><div class="code" id="code"></div></section>
     <section class="pn"><h3>EXIT CURVE<span id="gT">YOU GET vs YOU SELL</span></h3><canvas id="gc" height="150"></canvas><div class="pfoot"><span class="mut">A 1% · B 5% · C 10% drop</span><b class="num" id="gMax">max $0</b></div></section>
   </div>
+  </details>
   </div>
 
   <div id="v-larp" hidden>
@@ -491,7 +513,7 @@ footer .note{max-width:70%}
     <div class="seisbar"><span class="cap"><b id="stn">WATCHTOWER RHC-01</b> · robinhood chain · shark watch</span>
       <span class="chips" id="swin"><button data-w="900000">15 MIN</button><button data-w="7200000" class="on">2 H</button><button data-w="86400000">24 H</button></span></div>
     <div class="stagewrap"><div class="seis" id="seis"><canvas id="sc" class="pix" aria-label="Shark Watch: a river of time; each predator is a pool that suddenly lost liquidity, deeper and bigger means worse"></canvas><canvas id="scx"></canvas>
-      <div class="legend pxl" style="top:auto;bottom:4%;right:auto;left:3%;grid-auto-flow:column;gap:14px"><div>🐟 MINNOW · NORMAL</div><div>🐊 GATOR · BIG EXIT</div><div style="color:#D7263D">🦈 SHARK · LIKELY RUG</div><div style="color:#D7263D">🐙 KRAKEN · POOL EMPTIED</div></div></div></div></div></div>
+      <div class="legend pxl" style="top:auto;bottom:4%;right:auto;left:3%;grid-auto-flow:column;gap:14px"><div>🐟 MINNOW · NORMAL</div><div>🐊 GATOR · BIG EXIT</div><div style="color:#D7263D">🦈 SHARK · LIKELY RUG</div><div style="color:#D7263D">🐙 KRAKEN · POOL EMPTIED</div></div></div></div>
     <div class="lpanels seisp">
       <section class="pn"><h3>SHARK SIGHTINGS<span id="qn">0 EVENTS</span></h3><div class="qlog" id="qlog"></div></section>
       <section class="pn"><h3>WATCHTOWER<span id="stnmode">DEMO</span></h3><div id="station"></div><h3 style="margin-top:14px">PREDATOR SCALE<span>M = log₁₀(USD lost) × drop × 1.6</span></h3><div id="mscale"></div></section>
@@ -564,7 +586,7 @@ const DEMO=[
  ["RBNHOOD","WETH","Uniswap V4",3.4e6,8.8e3],["HOODAI","WETH","Uniswap V4",1.2e6,40e3],["R0BIN","WETH","Uniswap V4",.5e6,600],["FR0G","WETH","Uniswap V4",.6e6,1.4e3],["BRET","WETH","Uniswap V4",.7e6,2.1e3]
 ].map((r,i)=>({id:"d"+i,a:demoTok(r[0]),b:demoTok(r[1]),dex:r[2],vol:r[3],liq:r[4],created:new Date(Date.now()-(DEMO_AGE[r[0]]??20)*864e5).toISOString()}));
 
-const S={pools:[],tokens:new Map(),mode:"demo",sel:null,size:1000,auto:true,lastTouch:-1e9,updatedAt:null,scanned:0,wash:0,pk:0};
+const S={pools:[],tokens:new Map(),mode:"demo",sel:null,size:1000,auto:false,lastTouch:-1e9,updatedAt:null,scanned:0,wash:0,pk:0};
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const money=n=>{n=+n||0;const a=Math.abs(n);if(a>=1e9)return"$"+(n/1e9).toFixed(2)+"B";if(a>=1e6)return"$"+(n/1e6).toFixed(2)+"M";if(a>=1e3)return"$"+(n/1e3).toFixed(a>=1e5?0:1)+"K";return"$"+n.toFixed(2)};
@@ -913,13 +935,14 @@ function drawFx(dt,now){
 
 /* ================= metric strip ================= */
 const METRICS=[
- {k:"HONESTY",v:t=>t.h,f:t=>t.h.toFixed(3)},
- {k:"DEPTH",v:t=>Math.min(1,Math.log10(Math.max(1,t.R))/7.5),f:t=>money(t.R)},
- {k:"EXIT @5%",v:t=>Math.min(1,Math.log10(Math.max(1,t.e5))/6.5),f:t=>money(t.e5)},
+ {k:"REAL VOLUME",v:t=>t.h,f:t=>Math.round(t.h*100)+"%"},
+ {k:"POOL DEPTH",v:t=>Math.min(1,Math.log10(Math.max(1,t.R))/7.5),f:t=>money(t.R)},
+ {k:"SELLABLE @−5%",v:t=>Math.min(1,Math.log10(Math.max(1,t.e5))/6.5),f:t=>money(t.e5)},
  {k:"TURNOVER",v:t=>1-Math.min(1,Math.log10(1+t.turn)/3),f:t=>t.turn>=99?"∞":t.turn.toFixed(1)+"×"},
- {k:"SPREAD",v:t=>t.legs.length?1-t.top*.9:0,f:t=>t.legs.length?(1-t.top).toFixed(3):"0.000"},
+ {k:"SPREAD",v:t=>t.legs.length?1-t.top*.9:0,f:t=>t.legs.length?Math.round((1-t.top)*100)+"%":"0%"},
  {k:"CLEAN POOLS",v:t=>t.pools.length?t.pools.filter(p=>p.h>=.7).length/t.pools.length:0,f:t=>t.pools.filter(p=>p.h>=.7).length+"/"+t.pools.length}];
-$("cells").innerHTML=METRICS.map((m,i)=>`<div class="cell"><span class="cap">${m.k}</span><b class="num" id="m${i}">—</b></div>`).join("");
+const MTIP=["Share of reported 24h volume that looks like real trading (the rest is wash / fake volume)","Money on the token side of its pools (half of total liquidity)","How much you can sell before the price drops 5%","24h volume ÷ liquidity. Very high = churned / washed","How much liquidity sits outside the biggest pool","Pools whose volume looks mostly real (70% or more)"];
+$("cells").innerHTML=METRICS.map((m,i)=>`<div class="cell" title="${MTIP[i]}"><span class="cap">${m.k}</span><b class="num" id="m${i}">—</b></div>`).join("");
 let stripV=METRICS.map(()=>.5),cursorX=0;
 function drawStrip(dt,now){
   const c=$("stripc"),f=fit(c);if(!f)return;const{x,w,h}=f;x.clearRect(0,0,w,h);const t=S.sel;if(!t)return;
@@ -1042,7 +1065,7 @@ function larpOne(t,groups,origOf){{
 function pseudoTok(nt){const age=nt.created?(Date.now()-Date.parse(nt.created))/864e5:null;
   const t={pseudo:true,id:String(nt.id).toLowerCase(),sym:nt.sym||"?",name:nt.name||nt.sym||"",canon:canon(nt.sym),R:0,e5:0,age,pools:[],h:0,vol:0,grade:nt.status==="bonding"?"BONDING":"—",src:nt.src,srcName:nt.srcName};
   if(!LG)larpAll();larpOne(t,LG.groups,LG.origOf);return t}
-function larpOpen(t){if(!t)return;if(!t.pseudo){scan(t,true);return}S.lastTouch=performance.now();S.pseudo=t;larpRender(t);chips();
+function larpOpen(t){if(!t)return;if(!t.pseudo){scan(t,true);return}{const el=$("verdict");if(el)el.innerHTML=`<div class="vg gB">?</div><div class="vb"><div class="vh"><b>${esc(t.sym)}</b> · NO DEX POOL YET<span>${esc(t.name||"")}</span></div><p>${t.grade==="BONDING"?"Still on its launchpad bonding curve, so there is no volume or liquidity to grade yet.":"No pool found on Robinhood Chain."} The LARP check below works on ticker and name only.</p></div>`}S.lastTouch=performance.now();S.pseudo=t;larpRender(t);chips();
   toastMsg(t.sym+(t.grade==="BONDING"?" is still on a bonding curve · LARP checked by ticker and name":" has no DEX pool · LARP checked by ticker and name"))}
 const isMajor=t=>BLUE.has(String(t.sym).toUpperCase())&&t.larp?.isOrig!==false;
 const short8=id=>String(id).length>12?String(id).slice(0,6)+"…"+String(id).slice(-4):String(id);
@@ -1143,7 +1166,15 @@ function drawLarp(dt,now){
   const sc2=L.t.larp.score/100;L.gauge+=(sc2-L.gauge)*Math.min(1,dt*3);const by=LH-5;
   pxText(x,`BAIT METER ${Math.round(L.gauge*100)}/100 · ${L.t.larp.verdict}`,(LW-8)*K,(by-1)*K,fs*.62,L.gauge>=.6?"#FFFFFF":L.gauge>=.35?"#241527":"#FFF6DC","right",L.gauge>=.6?"#D7263D":L.gauge>=.35?"#FFD23F":"rgba(36,21,39,.75)");
 }
-function setView(v){VIEW=v;document.querySelectorAll(".tabs button").forEach(b=>b.classList.toggle("on",b.dataset.v===v));for(const k of["check","larp","seis","aut","swap","road"])$("v-"+k).hidden=v!==k;document.body.classList.toggle("road",v==="road");
+const TIPS={check:["IS THE VOLUME REAL, AND CAN YOU SELL?","Type a ticker or paste a CA, or tap a token below. Big fish = real volume · rubber ducks = fake (wash) volume · lakebed = how much you can sell before the price drops 5%. Grade A = healthy … F = fishy. The NEW TOKENS list is further down."],
+ larp:["IS THIS TOKEN A COPY?","The real fish is the original token; lures are copies that borrow its ticker or name. Green = same as the original, red = different. Tap 🆕 NEW or scroll to FRESH CATCH to check brand-new launches, including tokens still on a bonding curve."],
+ seis:["WHICH POOLS JUST GOT RUGGED?","Every predator is a pool that lost a big part of its liquidity at once. Deeper and bigger = worse; sharks in the red water are likely rugs. Pick a sighting below and press AUTOPSY to see what happened."],
+ aut:["HOW DID THIS TOKEN DIE?","Pick a case on the right. The chart shows price, liquidity and volume up to the moment of death, and the certificate gives the most likely cause. Estimates, not proof."],
+ swap:["CAN YOU ACTUALLY SELL IT?","FISHY quotes a real buy-then-sell round trip through the Uniswap contracts for the amount set in MY SELL SIZE, and shows what you lose to fees, price impact and hook taxes. Read-only, no wallet needed."],
+ road:["WHAT'S COMING NEXT","The plan for FISHY, phase by phase."]};
+function showTip(v){const el=$("tip");if(!el)return;let hid=false;try{hid=localStorage.getItem("fishyTip_"+v)==="0"}catch(_){}const T2=TIPS[v];el.hidden=hid||!T2;if(T2){$("tipq").textContent=T2[0];$("tipt").textContent=T2[1]}}
+document.addEventListener("click",e=>{if(e.target.id==="tipx"){try{localStorage.setItem("fishyTip_"+VIEW,"0")}catch(_){}$("tip").hidden=true}});
+function setView(v){VIEW=v;showTip(v);document.body.dataset.view=v;if(S.sel&&!(L&&L.t&&L.t.pseudo&&v==="larp"))renderVerdict(S.sel);document.querySelectorAll(".tabs button").forEach(b=>b.classList.toggle("on",b.dataset.v===v));for(const k of["check","larp","seis","aut","swap","road"])$("v-"+k).hidden=v!==k;document.body.classList.toggle("road",v==="road");
   $("labname").textContent={larp:"LURE LAB",seis:"SHARK WATCH",aut:"FORENSIC LAB",swap:"SWAP LAB",road:"ROADMAP"}[v]||"LIQUIDITY LAB";if(v==="swap"&&S.sel)swapRun(S.sel);chips();if(v==="check"&&T){drawStatic();layoutTags()}if(v==="larp"&&S.sel)larpRender(S.sel);if(v==="seis")seisPanels();if(v==="aut"&&S.sel)autopsy(S.sel);
   try{history.replaceState(null,"",v==="check"?location.pathname:"#"+v)}catch(_){}}
 document.querySelector(".tabs").addEventListener("click",e=>{const b=e.target.closest("button[data-v]");if(b){S.lastTouch=performance.now();setView(b.dataset.v)}});
@@ -1406,7 +1437,7 @@ async function swapRun(t){
 const pctTxt=v=>v==null?"—":(v<1?v.toFixed(2):v.toFixed(1))+"%";
 function swapRender(){
   const t=SWQ.t,d=SWQ.data,hd=$("swhead");if(!t)return;
-  if(SWQ.loading||!d){hd.className="seishead";hd.innerHTML=`<span class="ok">TESTING</span><span>buying ${esc(t.sym)} with ${money(S.size)} and selling it back on every pool…</span>`;$("swtab").innerHTML="";$("swperm").innerHTML="";$("swcalls").innerHTML="";return}
+  if(SWQ.loading||!d){hd.className="seishead";hd.innerHTML=`<span class="ok">TESTING</span><span>buying ${esc(t.sym)} with ${money(S.size)} and selling it back on every pool…</span>`;$("swtab").innerHTML=`<div class="note">Nothing to test for ${esc(t.sym)}. Pick a token with a pool above ${money(MIN_LIQ)}, for example from the chips above.</div>`;$("swperm").innerHTML=`<div class="note">Hook permissions appear once a Uniswap V4 pool is tested.</div>`;$("swcalls").innerHTML="";return}
   const ok=(d.results||[]).filter(r=>!r.error),r=ok[SWQ.sel]||ok[0];
   if(!r){hd.className="seishead";hd.innerHTML=`<span class="ok">NO TEST</span><span>${esc(d.error||("no pool of "+t.sym+" with over "+money(MIN_LIQ)+" liquidity to test"))}</span>`;$("swtab").innerHTML="";$("swperm").innerHTML="";$("swcalls").innerHTML="";return}
   const bad=["HOOK TRAP","NO EXIT","HOOK TAX"].includes(r.verdict);hd.className="seishead"+(bad?" danger":"");
@@ -1468,7 +1499,7 @@ function find(q){q=q.trim().toLowerCase();if(!q)return null;const all=[...S.toke
 async function scan(t,user){
   if(!t)return;if(user)S.lastTouch=performance.now();const id=++runId;S.sel=t;S.pseudo=null;$("q").value=t.sym;
   packets=[];hist=Array.from({length:120},()=>{const sp=t.h<.7&&Math.random()<.05;return{r:t.vol*(1+(Math.random()-.5)*.12)*(sp?2.2+Math.random():1),q:t.real*(1+(Math.random()-.5)*.08)}});ev("check");buildTree(t);squares(t);trace(t);chips();topo(t);
-  $("hVer").textContent=t.grade+" · "+Math.round(t.h*100)+"%"+(t.larp.score>=60?" · LARP":"");larpRender(t);if(VIEW==="aut")autopsy(t);if(VIEW==="seis")seisPanels();if(VIEW==="swap")swapRun(t);$("hWash").textContent=pad(S.wash,2);
+  $("hVer").textContent=t.grade+" · "+Math.round(t.h*100)+"% real"+(t.larp.score>=60?" · LARP":"");renderVerdict(t);larpRender(t);if(VIEW==="aut")autopsy(t);if(VIEW==="seis")seisPanels();if(VIEW==="swap")swapRun(t);$("hWash").textContent=pad(S.wash,2);
   codeLines=[];codeQ=[];code([`scan("${t.sym}")  // ${t.pools.length} pools`]);
   for(let k=0;k<=10;k++){if(id!==runId)return;setStep(0,k/10);if(k%3===0){ev("scan");S.scanned++}await sleep(55)}
   code([`for p in pools: real += min(p.vol, p.liq*10)`,`H = ${t.h.toFixed(3)}${t.h<.5?"  // wash loops detected":""}`]);
@@ -1478,7 +1509,20 @@ async function scan(t,user){
   for(let k=0;k<=10;k++){if(id!==runId)return;setStep(2,k/10);await sleep(60)}
   ev("verdict");setStep(3,0);code([`watch(${t.sym}, depth −30%)`]);
 }
-function topo(t){const pairs=new Set(t.pools.map(p=>(p.a.id===t.id?p.b:p.a).sym));$("topo").textContent=`token · ${t.sym} · ${t.cat} · pools ${t.pools.length} · dust ${t.dust.length} · pairs ${pairs.size} · grade ${t.grade}`;
+const GRADE_TXT={A:["LOOKS HEALTHY","Volume is mostly real and you can sell a decent size."],B:["MOSTLY OK","Some fake volume or thin spots, but nothing alarming."],C:["BE CAREFUL","A big part of the volume is fake, or the pool is shallow."],D:["RISKY","Mostly fake volume or very little you can sell."],F:["FISHY","Volume is mostly fake and/or there is almost no way out."]};
+function renderVerdict(t){const el=$("verdict");if(!el||!t)return;if(t.pseudo){el.innerHTML="";return}const g=GRADE_TXT[t.grade]||["",""],flags=[];
+  if(t.h<.5)flags.push(`${100-Math.round(t.h*100)}% of the volume looks fake`);
+  if(t.e5<2000)flags.push(`only ${money(t.e5)} can be sold before −5%`);
+  if(t.larp&&t.larp.score>=35)flags.push(t.larp.score>=60?"looks like a copy of another token (LARP)":"ticker or name looks borrowed");
+  const q=(typeof SZ!=="undefined"?SZ.quakes:[]).filter(x=>x.token&&x.token.id===t.id).sort((a,b)=>b.mag-a.mag)[0];if(q&&q.mag>=6)flags.push(`liquidity crashed −${Math.round(q.drop*100)}% recently (shark attack)`);
+  if(t.age!=null&&t.age<1)flags.push("less than a day old");
+  const go=(v,l)=>VIEW===v?"":`<button type="button" data-goto="${v}">${l} →</button>`;
+  el.innerHTML=`<div class="vg g${t.grade}">${t.grade}</div><div class="vb"><div class="vh"><b>${esc(t.sym)}</b> · ${g[0]}<span>${esc(t.name||"")}</span></div><p>${g[1]}</p>
+    <div class="vf"><span><i>REAL VOLUME</i>${Math.round(t.h*100)}%</span><span><i>LIQUIDITY</i>${money(t.R*2)}</span><span><i>SELLABLE BEFORE −5%</i>${money(t.e5)}</span><span><i>AGE</i>${t.age==null?"?":ageTxt(t.age)}</span></div>
+    ${flags.length?`<ul class="vflags">${flags.map(f=>`<li>⚠ ${esc(f)}</li>`).join("")}</ul>`:`<div class="vok">✓ no red flags found</div>`}</div>
+    <div class="vgo">${go("check","FULL CHECK")}${go("larp","IS IT A COPY?")}${go("swap","CAN I SELL?")}${q?go("seis","SHARK ATTACKS"):""}${go("aut","AUTOPSY")}</div>`}
+document.addEventListener("click",e=>{const b=e.target.closest("[data-goto]");if(b){setView(b.dataset.goto);const st={check:"stage",larp:"lstage",swap:"swstage",aut:"autchart",seis:"seis"}[b.dataset.goto];const el=st&&document.getElementById(st);if(el)setTimeout(()=>el.scrollIntoView({behavior:"smooth",block:"center"}),80)}});
+function topo(t){const pairs=new Set(t.pools.map(p=>(p.a.id===t.id?p.b:p.a).sym));$("topo").textContent=`details · ${t.sym} trades in ${t.pools.length} pool${t.pools.length===1?"":"s"} against ${pairs.size} pair${pairs.size===1?"":"s"}${t.dust.length?` · ${t.dust.length} tiny pool${t.dust.length===1?"":"s"} ignored`:""} · hover a number for what it means`;
   METRICS.forEach((m,i)=>$("m"+i).textContent=m.f(t))}
 function larpBadge(nt){const t=S.tokens.get(nt.id)||(LG?pseudoTok(nt):null);return t&&t.larp&&t.larp.score>=35?"⚑":""}
 function chips(){const list=(VIEW==="larp"?tradable().sort((a,b)=>b.larp.score-a.larp.score||b.vol-a.vol):tradable().sort((a,b)=>b.vol-a.vol)).slice(0,12);
@@ -1599,8 +1643,8 @@ function illustrate(){document.querySelectorAll(".pn h3:not([data-ill])").forEac
   const w=Math.max(...rows.map(r=>r.length)),hgt=rows.length,cv=document.createElement("canvas");cv.width=w;cv.height=hgt;cv.className="ill";cv.setAttribute("aria-hidden","true");
   const c=cv.getContext("2d");const P3=Object.assign({},ICON_PAL,PALS[name]||{});rows.forEach((row,j)=>{for(let i=0;i<row.length;i++){const ch=row[i];if(ch==="."||ch===" ")continue;c.fillStyle=(P3&&P3[ch])||PAL[ch];c.fillRect(i,j,1,1)}});
   cv.style.width=w*3+"px";cv.style.height=hgt*3+"px";h.classList.add("hasill");h.prepend(cv);window.FX&&FX.ill(cv)})}
-drawLogo();addEventListener("resize",drawLogo);illustrate();new MutationObserver(()=>{clearTimeout(window.__il);window.__il=setTimeout(illustrate,30)}).observe(document.body,{childList:true,subtree:true});
-boot();
+document.body.dataset.view="check";drawLogo();addEventListener("resize",drawLogo);illustrate();new MutationObserver(()=>{clearTimeout(window.__il);window.__il=setTimeout(illustrate,30)}).observe(document.body,{childList:true,subtree:true});
+boot();showTip(VIEW||"check");
 try{const hv=location.hash.slice(1);if(["larp","seis","aut","swap","road"].includes(hv))setTimeout(()=>setView(hv),300)}catch(_){}
 {const w=document.querySelector(".stagewrap");if(w&&w.scrollWidth>w.clientWidth)w.scrollLeft=(w.scrollWidth-w.clientWidth)*.6}
 </script>
