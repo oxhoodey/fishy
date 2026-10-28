@@ -1,0 +1,12 @@
+{
+  "name": "fishy",
+  "version": "1.0.0",
+  "description": "FISHY: real volume, exit depth, clone and rug alerts for every token on Robinhood Chain, powered by DexPaprika",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "DEMO_FALLBACK=1 node server.js"
+  },
+  "engines": { "node": ">=18" },
+  "license": "MIT"
+}

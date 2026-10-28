@@ -1,0 +1,304 @@
+// FISHY server: pulls Robinhood Chain pools from DexPaprika and scores every token on two questions:
+// how much of its volume is real, and how much can you sell before the price breaks. Serves dashboard + JSON + SSE.
+// Node 18+, no dependencies.
+const http = require("http");
+const fs = require("fs");
+const path = require("path");
+const swaptest = require("./swaptest");
+
+const CFG = {
+  port: +process.env.PORT || 8787,
+  chain: process.env.CHAIN || "robinhood",
+  limit: Math.min(100, +process.env.POOL_LIMIT || 100),
+  pages: Math.max(1, +process.env.POOL_PAGES || 2), // 2 pages x 100 pools
+  refreshMs: (+process.env.REFRESH_SECONDS || 60) * 1000,
+  minLiq: +process.env.MIN_LIQUIDITY || 1000,
+  turnover: +process.env.TURNOVER || 10,
+  excludeStocks: process.env.INCLUDE_STOCKS !== "1", // crypto-only by default // max believable daily volume = liquidity x this
+  historyMax: +process.env.HISTORY_POINTS || 1440,
+  histPoints: +process.env.POOL_HISTORY_POINTS || 1440, // per-pool liquidity samples kept in memory
+  quakeMinLiq: +process.env.QUAKE_MIN_LIQUIDITY || 2000,
+  quakeMinDrop: +process.env.QUAKE_MIN_DROP || 0.3,
+  swapPools: +process.env.SWAP_TEST_POOLS || 4,
+  apiBase: process.env.DEXPAPRIKA_BASE || "https://api.dexpaprika.com",
+  apiKey: process.env.DEXPAPRIKA_API_KEY || "",
+  apiKeyHeader: process.env.DEXPAPRIKA_API_KEY_HEADER || "authorization",
+  host: process.env.HOST || "0.0.0.0",
+  // demo data is only for local previews; on mainnet set DEMO_FALLBACK=0 so a data outage shows as an outage
+  demoFallback: process.env.DEMO_FALLBACK != null ? process.env.DEMO_FALLBACK === "1" : process.env.NODE_ENV !== "production",
+  site: {
+    name: process.env.SITE_NAME || "FISHY",
+    url: (process.env.SITE_URL || "").replace(/\/$/, ""),
+    xUrl: process.env.X_URL || "",
+    xHandle: process.env.X_HANDLE || "",
+    ca: process.env.TOKEN_CA || "",
+    symbol: process.env.TOKEN_SYMBOL || "$FISHY",
+    explorer: (process.env.EXPLORER_URL || "").replace(/\/$/, ""),
+    buyUrl: process.env.BUY_URL || "",
+  },
+};
+
+const STABLE = new Set(["USDG", "USDC", "USDT", "DAI", "USDE"]);
+const BLUE = new Set(["WETH", "ETH", "WBTC", "CBBTC", "ARB", "LINK", "UNI"]);
+const STOCK = new Set((process.env.STOCK_SYMBOLS || "TSLA,NVDA,AAPL,AMZN,SPY,QQQ,HOOD,MSFT,GOOGL,META,COIN,MSTR,AMD,NFLX,PLTR").split(",").map((s) => s.trim().toUpperCase()));
+const category = (sym) => { const s = String(sym || "").toUpperCase(); return STABLE.has(s) ? "stable" : BLUE.has(s) ? "blue" : STOCK.has(s) ? "stock" : "meme"; };
+
+const num = (v) => (v == null || v === "" || isNaN(+v) ? null : +v);
+
+function normalize(p) {
+  const t = Array.isArray(p.tokens) ? p.tokens : [];
+  if (t.length < 2) return null;
+  const tok = (x) => { const sym = String(x.symbol || x.name || "?").slice(0, 16); return { id: String(x.id || x.address || sym), sym, name: String(x.name || sym).slice(0, 48), cat: category(sym) }; };
+  return {
+    id: String(p.id),
+    dex: p.dex_name || p.dex_id || "",
+    a: tok(t[0]),
+    b: tok(t[1]),
+    vol: num(p.volume_usd_24h ?? p.volume_usd) || 0,
+    liq: num(p.liquidity_usd ?? p.liquidity) || 0,
+    chg: num(p.price_change_percentage_24h), // price move of tokens[0] in this pool
+    price: num(p.price_usd),
+    fee: num(p.fee),
+    createdBlock: num(p.created_at_block_number),
+    created: p.created_at || null,
+  };
+}
+
+// Constant-product estimate: each pool holds ~liq/2 per side. Selling x into combined reserve R drops price by x/(R+x).
+function tokenExits(pools) {
+  const map = new Map();
+  for (const p of pools) for (const t of [p.a, p.b]) {
+    if (!map.has(t.id)) map.set(t.id, { id: t.id, sym: t.sym, cat: t.cat, R: 0, legs: 0, dust: 0, vol: 0, real: 0 });
+    const e = map.get(t.id);
+    e.vol += p.vol;
+    e.real += p.liq < CFG.minLiq ? 0 : Math.min(p.vol, p.liq * CFG.turnover);
+    if (p.liq >= CFG.minLiq) { e.R += p.liq / 2; e.legs++; } else e.dust++;
+  }
+  for (const e of map.values()) {
+    const at = (q) => (e.R * q) / (1 - q);
+    e.exit1 = at(0.01); e.exit5 = at(0.05); e.exit10 = at(0.1);
+    e.door = e.exit5 >= 1e5 ? "wide" : e.exit5 >= 1e4 ? "open" : e.exit5 >= 1e3 ? "narrow" : "shut";
+    e.honesty = e.vol > 0 ? e.real / e.vol : 1;
+    e.score = 0.5 * e.honesty + 0.5 * Math.min(1, Math.log10(Math.max(1, e.exit5)) / 5);
+    e.grade = e.score >= 0.85 ? "A" : e.score >= 0.7 ? "B" : e.score >= 0.5 ? "C" : e.score >= 0.3 ? "D" : "F";
+  }
+  return map;
+}
+
+function chainIndex(pools, exits) {
+  const acc = CFG.excludeStocks ? { blue: [0, 0], meme: [0, 0] } : { blue: [0, 0], stock: [0, 0], meme: [0, 0] };
+  const best = new Map(); // deepest pool where the token is tokens[0] carries its price move
+  for (const p of pools) if (p.chg != null && p.liq >= CFG.minLiq) { const b = best.get(p.a.id); if (!b || p.liq > b.liq) best.set(p.a.id, p); }
+  for (const [id, p] of best) { const e = exits.get(id); if (!e || !acc[e.cat]) continue; acc[e.cat][0] += p.chg * e.R; acc[e.cat][1] += e.R; }
+  const out = {};
+  for (const k in acc) out[k] = acc[k][1] ? acc[k][0] / acc[k][1] : null;
+  return out;
+}
+
+const headers = () => (CFG.apiKey ? { accept: "application/json", [CFG.apiKeyHeader]: CFG.apiKey } : { accept: "application/json" });
+
+let snapshot = { chain: CFG.chain, updatedAt: null, error: null, pools: [], index: null, history: [] };
+const history = [];
+const clients = new Set();
+
+async function fetchPools() {
+  const all = [];
+  let cursor = "";
+  for (let i = 0; i < CFG.pages; i++) {
+    const url = `${CFG.apiBase}/pools/search?chains=${encodeURIComponent(CFG.chain)}&order_by=volume_usd_24h&sort=desc&limit=${CFG.limit}${cursor ? "&cursor=" + encodeURIComponent(cursor) : ""}`;
+    const res = await fetch(url, { headers: headers(), signal: AbortSignal.timeout(20000) });
+    if (!res.ok) throw new Error(`DexPaprika ${res.status}`);
+    const json = await res.json();
+    all.push(...(json.results || []));
+    if (!json.has_next_page || !json.next_cursor) break;
+    cursor = json.next_cursor;
+  }
+  return all;
+}
+
+// ---------- seismograph: liquidity history per pool + quake detection ----------
+const HUBS = new Set(["WETH", "ETH", ...STABLE]);
+const poolHist = new Map(); // poolId -> [{t, liq, vol, price}]
+const quakes = [];
+let prevLiq = new Map();
+const subject = (p) => (HUBS.has(p.a.sym.toUpperCase()) && !HUBS.has(p.b.sym.toUpperCase()) ? [p.b, p.a] : [p.a, p.b]);
+function detectQuakes(pools, now) {
+  let moved = 0, total = 0;
+  for (const p of pools) {
+    const arr = poolHist.get(p.id) || [];
+    arr.push({ t: now, liq: p.liq, vol: p.vol, price: p.price });
+    while (arr.length > CFG.histPoints) arr.shift();
+    poolHist.set(p.id, arr);
+    const before = prevLiq.get(p.id);
+    if (before != null) { moved += Math.abs(p.liq - before); total += before; }
+    if (before != null && before >= CFG.quakeMinLiq && p.liq < before) {
+      const drop = 1 - p.liq / before;
+      if (drop >= CFG.quakeMinDrop) {
+        const lost = before - p.liq, [tok, pair] = subject(p);
+        const mag = Math.min(9.9, Math.max(1, Math.log10(Math.max(10, lost)) * drop * 1.6));
+        const q = { id: `${p.id}:${now}`, t: new Date(now).toISOString(), pool: p.id, dex: p.dex, token: { id: tok.id, sym: tok.sym, name: tok.name }, pair: pair.sym, before, after: p.liq, drop, lost, mag: +mag.toFixed(1) };
+        quakes.unshift(q);
+        broadcast("quake", q);
+      }
+    }
+  }
+  while (quakes.length > 500) quakes.pop();
+  prevLiq = new Map(pools.map((p) => [p.id, p.liq]));
+  return total ? moved / total : 0;
+}
+
+// ---------- SWAP TEST: real round trips through the Uniswap quoters ----------
+const swapCache = new Map();
+function quoteUsdOf(sym) {
+  const s = String(sym || "").toUpperCase();
+  if (STABLE.has(s)) return 1;
+  if (s === "WETH" || s === "ETH") {
+    const p = snapshot.pools.filter((x) => (x.a.sym.toUpperCase() === "WETH" || x.a.sym.toUpperCase() === "ETH") && STABLE.has(x.b.sym.toUpperCase()) && x.price > 0).sort((a, b) => b.liq - a.liq)[0];
+    return p ? p.price : null;
+  }
+  return null;
+}
+async function swapTestToken(tokenId, usd) {
+  const k = tokenId.toLowerCase() + ":" + usd, c = swapCache.get(k);
+  if (c && Date.now() - c.at < 120000) return c.data;
+  const pools = snapshot.pools.filter((p) => p.a.id.toLowerCase() === tokenId.toLowerCase() || p.b.id.toLowerCase() === tokenId.toLowerCase())
+    .filter((p) => p.liq >= CFG.minLiq).sort((a, b) => b.liq - a.liq).slice(0, CFG.swapPools);
+  const results = [];
+  for (const p of pools) {
+    const quote = p.a.id.toLowerCase() === tokenId.toLowerCase() ? p.b : p.a, qUsd = quoteUsdOf(quote.sym);
+    if (!qUsd) { results.push({ pool: p.id, dex: p.dex, quote: quote.sym, error: "no USD price for the quote asset " + quote.sym }); continue; }
+    try { results.push(await swaptest.roundTrip(p, tokenId, usd, qUsd)); }
+    catch (e) { results.push({ pool: p.id, dex: p.dex, quote: quote.sym, error: String(e.message || e) }); }
+  }
+  const ok = results.filter((r) => !r.error), best = ok.sort((a, b) => a.lossPct - b.lossPct)[0] || null;
+  const data = { token: tokenId, usd, at: new Date().toISOString(), rpc: swaptest.CFG.rpc, best, results: results.sort((a, b) => (a.error ? 1 : 0) - (b.error ? 1 : 0) || (a.lossPct || 0) - (b.lossPct || 0)) };
+  swapCache.set(k, { at: Date.now(), data });
+  return data;
+}
+
+// pool OHLCV proxy with a small cache (price + volume history for autopsies)
+const ohlcvCache = new Map();
+async function poolOHLCV(id) {
+  const c = ohlcvCache.get(id);
+  if (c && Date.now() - c.at < 5 * 60 * 1000) return c.data;
+  const start = new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10);
+  const url = `${CFG.apiBase}/networks/${encodeURIComponent(CFG.chain)}/pools/${encodeURIComponent(id)}/ohlcv?start=${start}&interval=1h&limit=168`;
+  const res = await fetch(url, { headers: headers(), signal: AbortSignal.timeout(20000) });
+  if (!res.ok) throw new Error(`DexPaprika ohlcv ${res.status}`);
+  const raw = await res.json();
+  const rows = Array.isArray(raw) ? raw : raw.results || raw.data || [];
+  const data = rows.map((r) => ({ t: Date.parse(r.time_open || r.time_close || r.timestamp || r.time), o: num(r.open), h: num(r.high), l: num(r.low), c: num(r.close), v: num(r.volume) })).filter((r) => !isNaN(r.t)).sort((a, b) => a.t - b.t);
+  ohlcvCache.set(id, { at: Date.now(), data });
+  return data;
+}
+
+async function refresh() {
+  try {
+    const pools = (await fetchPools()).map(normalize).filter(Boolean)
+      .filter((p) => !CFG.excludeStocks || (p.a.cat !== "stock" && p.b.cat !== "stock"));
+    if (!pools.length) throw new Error("DexPaprika returned no pools");
+    const exits = tokenExits(pools);
+    const index = chainIndex(pools, exits);
+    const t = new Date().toISOString();
+    const activity = detectQuakes(pools, Date.parse(t));
+    history.push({ t, index, activity });
+    while (history.length > CFG.historyMax) history.shift();
+    snapshot = { chain: CFG.chain, updatedAt: t, error: null, pools, index, history: history.slice(-288) };
+    broadcast("pools", snapshot);
+    console.log(`[${t}] ${pools.length} pools · index`, index);
+  } catch (e) {
+    snapshot.error = String(e.message || e);
+    console.error("refresh failed:", snapshot.error);
+  }
+}
+
+function broadcast(event, data) {
+  const msg = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+  for (const res of clients) res.write(msg);
+}
+
+const PUB = path.join(__dirname, "public");
+const INDEX = path.join(PUB, "index.html");
+const MIME = { ".png": "image/png", ".svg": "image/svg+xml", ".ico": "image/x-icon", ".mp4": "video/mp4", ".json": "application/json", ".txt": "text/plain; charset=utf-8", ".webmanifest": "application/manifest+json" };
+const publicConfig = () => ({ ...CFG.site, chain: CFG.chain, chainId: 4663, demoFallback: CFG.demoFallback, refreshSeconds: CFG.refreshMs / 1000 });
+let INDEX_CACHE = null;
+function renderIndex(req) {
+  if (!INDEX_CACHE || process.env.NODE_ENV !== "production") INDEX_CACHE = fs.readFileSync(INDEX, "utf8");
+  const origin = CFG.site.url || `https://${req.headers["x-forwarded-host"] || req.headers.host || "localhost"}`;
+  const esc = (v) => String(v).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  return INDEX_CACHE.replace(/\{\{SITE_URL\}\}/g, esc(origin)).replace("/*FISHY_CONFIG*/", `window.FISHY_CONFIG=${JSON.stringify(publicConfig()).replace(/</g, "\\u003c")};`);
+}
+function send(res, code, body, type = "application/json; charset=utf-8") {
+  res.writeHead(code, { "content-type": type, "access-control-allow-origin": "*", "cache-control": "no-store" });
+  res.end(typeof body === "string" ? body : JSON.stringify(body));
+}
+
+const SWAP_CACHE = new Map();
+let swapBusy = 0;
+const server = http.createServer((req, res) => {
+  const u = new URL(req.url, "http://x");
+  if (u.pathname === "/api/pools") return send(res, 200, snapshot);
+  if (u.pathname === "/api/index") return send(res, 200, { updatedAt: snapshot.updatedAt, index: snapshot.index, history });
+  if (u.pathname.startsWith("/api/token/")) {
+    const q = decodeURIComponent(u.pathname.slice(11)).toLowerCase();
+    const size = +u.searchParams.get("size") || 1000;
+    const exits = tokenExits(snapshot.pools);
+    const e = [...exits.values()].filter((x) => x.id.toLowerCase() === q || x.sym.toLowerCase() === q).sort((a, b) => b.R - a.R)[0];
+    if (!e) return send(res, 404, { error: "token not in tracked pools", token: q });
+    const impact = e.R > 0 ? size / (e.R + size) : 1;
+    return send(res, 200, { ...e, size, impact, youGet: size * (1 - impact) * 0.997, updatedAt: snapshot.updatedAt });
+  }
+  if (u.pathname === "/api/quakes") return send(res, 200, { since: history[0] ? history[0].t : null, quakes, activity: history.slice(-240).map((h) => ({ t: h.t, a: h.activity || 0 })) });
+  if (u.pathname.startsWith("/api/history/")) {
+    const id = decodeURIComponent(u.pathname.slice(13));
+    return send(res, 200, { pool: id, points: poolHist.get(id) || [], quakes: quakes.filter((q) => q.pool === id) });
+  }
+  if (u.pathname.startsWith("/api/swaptest/")) {
+    const id = decodeURIComponent(u.pathname.slice(14)), usd = Math.min(1e6, Math.max(1, +u.searchParams.get("usd") || 100));
+    const key = id + "|" + Math.round(usd), hit = SWAP_CACHE.get(key);
+    if (hit && Date.now() - hit.t < 60000) return send(res, 200, hit.d);
+    if (swapBusy >= 4) return send(res, 429, { error: "busy, try again in a few seconds" });
+    swapBusy++;
+    swapTestToken(id, usd).then((d) => { SWAP_CACHE.set(key, { t: Date.now(), d }); if (SWAP_CACHE.size > 500) SWAP_CACHE.delete(SWAP_CACHE.keys().next().value); send(res, 200, d); })
+      .catch((e) => send(res, 502, { error: String(e.message || e) })).finally(() => swapBusy--);
+    return;
+  }
+  if (u.pathname.startsWith("/api/ohlcv/")) {
+    const id = decodeURIComponent(u.pathname.slice(11));
+    poolOHLCV(id).then((data) => send(res, 200, { pool: id, data })).catch((e) => send(res, 502, { error: String(e.message || e) }));
+    return;
+  }
+  if (u.pathname === "/api/stream") {
+    res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache", connection: "keep-alive", "access-control-allow-origin": "*" });
+    res.write(`retry: 5000\n\n`);
+    clients.add(res);
+    const ping = setInterval(() => res.write(`: ping\n\n`), 25000);
+    req.on("close", () => { clearInterval(ping); clients.delete(res); });
+    return;
+  }
+  if (u.pathname === "/api/health") return send(res, 200, { ok: !snapshot.error, updatedAt: snapshot.updatedAt, pools: snapshot.pools.length, error: snapshot.error, clients: clients.size });
+  if (u.pathname === "/api/config") return send(res, 200, publicConfig());
+  if (u.pathname === "/" || u.pathname === "/index.html") {
+    try { return send(res, 200, renderIndex(req), "text/html; charset=utf-8"); } catch (e) { return send(res, 500, { error: "index missing" }); }
+  }
+  // static assets from public/ (favicon, og image, optional logo); no directory traversal
+  const rel = path.normalize(decodeURIComponent(u.pathname)).replace(/^([/\\.])+/, "");
+  const file = path.join(PUB, rel), ext = path.extname(file).toLowerCase();
+  if (file.startsWith(PUB + path.sep) && MIME[ext]) {
+    return fs.readFile(file, (err, buf) => {
+      if (err) return send(res, 404, { error: "not found" });
+      res.writeHead(200, { "content-type": MIME[ext], "cache-control": "public, max-age=86400" });
+      res.end(buf);
+    });
+  }
+  send(res, 404, { error: "not found" });
+});
+
+if (require.main === module) {
+  server.listen(CFG.port, CFG.host, () => console.log(`FISHY on http://${CFG.host}:${CFG.port} · chain=${CFG.chain} · demoFallback=${CFG.demoFallback}`));
+  const stop = () => { console.log("shutting down"); for (const c of clients) c.end(); server.close(() => process.exit(0)); setTimeout(() => process.exit(0), 3000).unref(); };
+  process.on("SIGTERM", stop); process.on("SIGINT", stop);
+  refresh();
+  setInterval(refresh, CFG.refreshMs);
+}
+module.exports = { normalize, tokenExits, chainIndex, category, swapTestToken };
