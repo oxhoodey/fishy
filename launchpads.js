@@ -211,14 +211,19 @@ function list(ethUsd, onDex) {
     const usd = quoteUsd(l, ethUsd);
     if (l.lastPrice && l.supply && usd) mc = (Number(l.lastPrice.q) / qd) / (Number(l.lastPrice.tok) / td) * usd * (Number(l.supply) / td);
     if (l.threshold && l.threshold > 0n) {
-      const got = l.quoteBal != null ? l.quoteBal : l.netQuote > 0n ? l.netQuote : 0n;
+      const net = l.netQuote > 0n ? l.netQuote : 0n, bal = l.quoteBal || 0n;
+      const got = bal > net ? bal : net; // curve balance, or buys - sells if the curve does not hold the quote itself
       raised = Number(got) / qd; target = Number(l.threshold) / qd;
       progress = Math.max(0, Math.min(1, raised / target));
     }
     return { id: l.id, sym: l.sym, name: l.name, created: l.created, src: l.pad, srcName: l.padName, status: graduated ? "dex" : "bonding", progress, raised, target, mc, liq: null, pair: l.pairSym || "", trades: l.trades || 0 };
   });
 }
+// one token's raw scanner state, for checking against ponsfamily.com
+const debug = (addr) => { const l = S.launches.get(String(addr).toLowerCase()); if (!l) return null;
+  const big = (v) => (v == null ? null : v.toString());
+  return { id: l.id, sym: l.sym, pad: l.pad, block: l.block, curve: l.curve || null, pairToken: l.pairToken || null, pairSym: l.pairSym || null, threshold: big(l.threshold), curveQuoteBalance: big(l.quoteBal), netQuoteFromTrades: big(l.netQuote), trades: l.trades || 0, lastPrice: l.lastPrice ? { quote: big(l.lastPrice.q), tokens: big(l.lastPrice.tok) } : null, scanCursors: CUR }; };
 const known = (addr) => { const l = S.launches.get(String(addr).toLowerCase()); return l ? { src: l.pad, srcName: l.padName } : null; };
 const status = () => ({ cursors: CUR, tradeLogs: S.tradeLogs || 0, withBalance: [...S.launches.values()].filter((l) => l.quoteBal > 0n).length, last: S.last, range: S.range, tracked: S.launches.size, curves: S.curves.size, errors: S.errors, lastError: S.lastError, scannedAt: S.scannedAt, pads: PADS.map((p) => p.key) });
 
-module.exports = { scan, list, known, status, PADS };
+module.exports = { scan, list, known, status, debug, PADS };
