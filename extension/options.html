@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>FISHY settings</title>
+<style>
+body{margin:0;background:#5FA84A;font:14px ui-monospace,Menlo,Consolas,monospace;color:#3B2416;display:grid;place-items:center;min-height:100vh}
+.card{background:#FFF6DC;border:3px solid #241527;border-radius:8px;box-shadow:0 0 0 3px #8B5A2B,5px 6px 0 3px rgba(40,24,12,.35);padding:22px;max-width:460px;width:calc(100% - 40px)}
+h1{margin:0 0 6px;font-size:20px}p{margin:6px 0 12px;color:#5C3A1A}
+input{width:100%;box-sizing:border-box;font:14px ui-monospace,monospace;padding:10px;border:3px solid #241527;border-radius:6px;background:#fff}
+button{margin-top:12px;font:700 13px ui-monospace,monospace;background:#3E8E5E;color:#FFF6DC;border:3px solid #241527;border-radius:6px;padding:10px 14px;cursor:pointer}
+#msg{margin-top:10px;min-height:1.4em}
+.ok{color:#2E7D46}.bad{color:#D7263D}
+</style></head>
+<body><div class="card">
+<h1>FISHY 🐟 settings</h1>
+<p>Address of the FISHY site this extension asks for verdicts. The extension only sends the contract address you click.</p>
+<input id="api" placeholder="https://your-fishy-site.com" autocomplete="off" spellcheck="false">
+<button id="save">SAVE &amp; TEST</button>
+<div id="msg"></div>
+</div><script src="options.js"></script></body></html>

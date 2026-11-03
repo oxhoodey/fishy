@@ -1,0 +1,45 @@
+{
+  "manifest_version": 3,
+  "name": "FISHY: Is this token fishy?",
+  "short_name": "FISHY",
+  "version": "0.1.0",
+  "description": "Spot fake volume, copycat (LARP) tokens and thin exits for any Robinhood Chain contract address you see on X, Pons and DexPaprika.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "FISHY: check a token",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "options_page": "options.html",
+  "permissions": [
+    "storage"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://x.com/*",
+        "https://twitter.com/*",
+        "https://ponsfamily.com/*",
+        "https://*.ponsfamily.com/*",
+        "https://dexpaprika.com/*",
+        "https://robinhoodchain.blockscout.com/*"
+      ],
+      "js": [
+        "card.js",
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

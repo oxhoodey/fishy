@@ -166,6 +166,54 @@ async function lookupToken(addr) {
   if (LOOKUP_CACHE.size > 300) LOOKUP_CACHE.delete(LOOKUP_CACHE.keys().next().value);
   return d;
 }
+// one compact verdict for a CA (used by the browser extension): same grade formula as the web app
+const CANON_GLYPH = { "0": "O", "1": "I", "3": "E", "4": "A", "5": "S", "$": "S" };
+const canonSym = (x) => String(x || "").toUpperCase().split("").map((ch) => CANON_GLYPH[ch] || ch).join("").replace(/[^A-Z]/g, "").replace(/(OFFICIAL|REAL|INU|V2|V3|2|3)$/, "");
+async function checkToken(addr) {
+  const d = await lookupToken(addr).catch(() => ({ pools: [] }));
+  const sideOf = (p) => (String(p.a.id).toLowerCase() === addr ? p.a : String(p.b.id).toLowerCase() === addr ? p.b : null);
+  const pools = (d.pools || []).filter(sideOf);
+  let sym = null, name = null;
+  for (const p of pools) { const t = sideOf(p); if (t) { sym = t.sym; name = t.name; break; } }
+  const onDex = new Set(); for (const p of snapshot.pools || []) { onDex.add(String(p.a.id).toLowerCase()); onDex.add(String(p.b.id).toLowerCase()); } if (pools.length) onDex.add(addr);
+  const launch = launchpads.list((a2, s2) => quoteUsdOf(s2), onDex).find((l) => l.id === addr);
+  if (!sym && launch) { sym = launch.sym; name = launch.name; }
+  if (!sym) { try { const m = await launchpads.tokenMeta(addr); sym = m.symbol || null; name = m.name || sym; } catch (_) {} }
+  const MIN_LIQ = 1000, TURN = 10;
+  let vol = 0, real = 0, R = 0, created = null;
+  for (const p of pools) {
+    vol += p.vol; real += p.liq < MIN_LIQ ? 0 : Math.min(p.vol, p.liq * TURN);
+    if (p.liq >= MIN_LIQ) R += p.liq / 2;
+    const c = Date.parse(p.created || ""); if (!isNaN(c) && (!created || c < created)) created = c;
+  }
+  const h = vol ? real / vol : 1, e5 = R * 0.05 / 0.95;
+  const score = 0.5 * h + 0.5 * Math.min(1, Math.log10(Math.max(1, e5)) / 5);
+  const grade = pools.length ? (score >= 0.85 ? "A" : score >= 0.7 ? "B" : score >= 0.5 ? "C" : score >= 0.3 ? "D" : "F") : null;
+  // LARP-lite: a deeper token elsewhere on the chain uses the same ticker
+  const flags = [];
+  const myCanon = canonSym(sym);
+  let copies = null;
+  if (myCanon.length >= 2) {
+    for (const [, e] of tokenExits(snapshot.pools || [])) {
+      if (String(e.id).toLowerCase() === addr) continue;
+      if (canonSym(e.sym) === myCanon && e.R > Math.max(1, R) * 3 && (!copies || e.R > copies.R)) copies = e;
+    }
+  }
+  const official = CFG.site.ca ? CFG.site.ca.toLowerCase() : "";
+  const fakeFishy = !!official && addr !== official && /FISHY/.test(String(sym || "").toUpperCase() + String(name || "").toUpperCase());
+  if (fakeFishy) flags.push("Uses the FISHY name but is NOT the official FISHY contract");
+  if (copies) flags.push(`Same ticker as a deeper token (${copies.sym} ${String(copies.id).slice(0, 6)}…${String(copies.id).slice(-4)})`);
+  if (pools.length && h < 0.5) flags.push(`${Math.round((1 - h) * 100)}% of the volume looks fake`);
+  if (pools.length && e5 < 2000) flags.push(`Only $${Math.round(e5).toLocaleString("en-US")} can be sold before -5%`);
+  if (created && Date.now() - created < 864e5) flags.push("Less than a day old");
+  return {
+    address: addr, symbol: sym, name, grade, officialFishy: !!official && addr === official, fakeFishy,
+    realVolume: pools.length ? Math.round(h * 100) : null, liquidity: Math.round(R * 2), sellable5: Math.round(e5), pools: pools.length,
+    launchpad: launch ? { src: launch.src, name: launch.srcName, status: launch.status, progress: launch.progress, raised: launch.raised, target: launch.target, pair: launch.pair } : null,
+    larp: copies ? { score: 55, original: { symbol: copies.sym, address: copies.id } } : { score: 0 },
+    flags, site: CFG.site.url || null, updatedAt: new Date().toISOString(),
+  };
+}
 // where a token was launched: Pons (graduationStatus on the Pons factory/locker), Flap (vanity 8888/7777 addresses, per Flap docs) or straight on a DEX
 const PONS_CONTRACTS = (process.env.PONS_CONTRACTS || "0x7ed598bcef8bd9edd8c97a195c6d13f40801ec7e,0xA5aAb3F0c6EeadF30Ef1D3Eb997108E976351feB,0x736D76699C26D0d966744cAe304C000d471f7F35,0x0c37a24F5D23A486FA692d1500881d698B1F77a4,0x31ca5E101941A93A7DD6d0497928700625CF54B5")
   .split(",").map((x) => x.trim()).filter(Boolean);
@@ -423,6 +471,12 @@ const server = http.createServer((req, res) => {
   if (u.pathname.startsWith("/api/launchpads/")) { const d = launchpads.debug(u.pathname.split("/").pop()); return send(res, d ? 200 : 404, d || { error: "token not tracked by the launchpad scanner" }); }
   if (u.pathname === "/api/launchpads") return send(res, 200, launchpads.status());
   if (u.pathname === "/api/new") return send(res, 200, { updatedAt: snapshot.updatedAt, tokens: snapshot.newTokens || [] });
+  if (u.pathname.startsWith("/api/check/")) {
+    const addr = decodeURIComponent(u.pathname.slice(11)).trim().toLowerCase();
+    if (!/^0x[0-9a-f]{40}$/.test(addr)) return send(res, 400, { error: "send a 0x… contract address (40 hex characters)" });
+    checkToken(addr).then((d) => send(res, 200, d)).catch((e) => send(res, 502, { error: String(e.message || e) }));
+    return;
+  }
   if (u.pathname.startsWith("/api/lookup/")) {
     const addr = decodeURIComponent(u.pathname.slice(12)).trim().toLowerCase();
     if (!/^0x[0-9a-f]{40}$/.test(addr)) return send(res, 400, { error: "send a 0x… contract address (40 hex characters)" });

@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>FISHY</title>
+<style>
+body{margin:0;width:330px;background:#5FA84A;font:13px ui-monospace,Menlo,Consolas,monospace;color:#3B2416}
+.wrap{padding:12px}
+h1{margin:0 0 8px;font-size:18px;color:#FFD23F;text-shadow:2px 2px 0 #241527;letter-spacing:.06em}
+h1 small{font-size:11px;color:#FFF6DC;text-shadow:1px 1px 0 #241527;display:block;letter-spacing:0}
+form{display:flex;gap:6px;margin-bottom:10px}
+input{flex:1;min-width:0;font:13px ui-monospace,monospace;padding:8px;border:3px solid #241527;border-radius:6px;background:#FFF6DC}
+button{font:700 12px ui-monospace,monospace;background:#3E8E5E;color:#FFF6DC;border:3px solid #241527;border-radius:6px;padding:0 10px;cursor:pointer}
+#out:empty{display:none}
+.foot{margin-top:10px;display:flex;justify-content:space-between;font-size:11px}
+.foot a{color:#FFF6DC}
+</style></head>
+<body><div class="wrap">
+<h1>FISHY 🐟<small>is this token fishy? · Robinhood Chain</small></h1>
+<form id="f"><input id="ca" placeholder="Paste a token CA (0x…)" autocomplete="off" spellcheck="false"><button>CHECK</button></form>
+<div id="out"></div>
+<div class="foot"><a href="#" id="opts">Settings</a><a href="https://x.com/fishy_rh" target="_blank" rel="noopener noreferrer">@fishy_rh</a></div>
+</div>
+<script src="card.js"></script><script src="popup.js"></script>
+</body></html>
