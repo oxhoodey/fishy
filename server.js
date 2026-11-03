@@ -37,7 +37,7 @@ const CFG = {
     xHandle: process.env.X_HANDLE || "@fishy_rh",
     ca: process.env.TOKEN_CA || "",
     symbol: process.env.TOKEN_SYMBOL || "",
-    explorer: (process.env.EXPLORER_URL || "").replace(/\/$/, ""),
+    explorer: (process.env.EXPLORER_URL || "https://robinhoodchain.blockscout.com").replace(/\/$/, ""),
     buyUrl: process.env.BUY_URL || "",
     // {ca} is replaced by the token address; check the format on Pons and change it in Railway if needed
     ponsUrl: process.env.PONS_TOKEN_URL || "https://ponsfamily.com/launchpad/{ca}",
