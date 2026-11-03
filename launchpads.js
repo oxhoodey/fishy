@@ -86,7 +86,7 @@ async function erc20Meta(addr) {
   const call = (data) => rpc("eth_call", [{ to: addr, data }, "latest"]).catch(() => null);
   const [n, s, d, ts] = await Promise.all([call("0x06fdde03"), call("0x95d89b41"), call("0x313ce567"), call("0x18160ddd")]);
   const m = { name: decodeString(n).slice(0, 48), symbol: decodeString(s).slice(0, 16), decimals: d && d !== "0x" ? parseInt(d, 16) : 18, supply: ts && ts !== "0x" ? BigInt(ts) : 0n };
-  S.meta.set(addr, m);
+  if (m.symbol || m.name) S.meta.set(addr, m); // empty answer = try again on a later scan
   return m;
 }
 
@@ -180,13 +180,16 @@ async function scan() {
   try { await readCurveBalances(); } catch (e) { fail("curve balances", e); }
   S.last = latest;
   // names, symbols, supply, launch time for the newest tokens
-  const todo = [...S.launches.values()].filter((l) => !l.sym).sort((a, b) => b.block - a.block).slice(0, CFG.metaPerScan);
+  // tokens with no name yet, plus ones still showing their address because name()/symbol() came back empty (retried up to 12 scans)
+  const todo = [...S.launches.values()].filter((l) => !l.sym || (l.noName && (l.nameTries || 0) < 12)).sort((a, b) => b.block - a.block).slice(0, CFG.metaPerScan);
   for (let i = 0; i < todo.length; i += 6) {
     await Promise.all(todo.slice(i, i + 6).map(async (l) => {
       try {
         const m = await erc20Meta(l.id);
-        l.sym = m.symbol || l.id.slice(0, 6) + "…" + l.id.slice(-4); l.name = m.name || l.sym; l.decimals = m.decimals; l.supply = m.supply;
-        l.created = new Date(await blockTime(l.block)).toISOString();
+        l.nameTries = (l.nameTries || 0) + 1;
+        l.noName = !m.symbol && !m.name;
+        l.sym = m.symbol || m.name || l.id.slice(0, 6) + "…" + l.id.slice(-4); l.name = m.name || m.symbol || ""; l.decimals = m.decimals; if (m.supply) l.supply = m.supply;
+        if (!l.created) l.created = new Date(await blockTime(l.block)).toISOString();
         if (l.pairToken && !l.pairSym) { const pm = /^0x0{40}$/.test(l.pairToken) ? { symbol: "ETH", decimals: 18 } : await erc20Meta(l.pairToken); l.pairSym = pm.symbol || "?"; l.pairDec = pm.decimals == null ? 18 : pm.decimals; }
       } catch (_) {}
     }));
@@ -216,7 +219,7 @@ function list(ethUsd, onDex) {
       raised = Number(got) / qd; target = Number(l.threshold) / qd;
       progress = Math.max(0, Math.min(1, raised / target));
     }
-    return { id: l.id, sym: l.sym, name: l.name, created: l.created, src: l.pad, srcName: l.padName, status: graduated ? "dex" : "bonding", progress, raised, target, mc, liq: null, pair: l.pairSym || "", trades: l.trades || 0 };
+    return { id: l.id, sym: l.sym, name: l.name, noName: !!l.noName, created: l.created, src: l.pad, srcName: l.padName, status: graduated ? "dex" : "bonding", progress, raised, target, mc, liq: null, pair: l.pairSym || "", trades: l.trades || 0 };
   });
 }
 // one token's raw scanner state, for checking against ponsfamily.com
